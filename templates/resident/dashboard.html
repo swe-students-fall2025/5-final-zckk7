@@ -79,18 +79,27 @@
         </div>
     </div>
     
-    <div class="col-md-3 col-6">
-        <div class="card h-100 p-3 bg-dark text-white">
+        <a href="/maintenance/new" class="col-md-3 col-6 text-decoration-none">
+        <div class="card h-100 p-3 bg-dark text-white border-0 shadow hover-scale">
             <div class="d-flex justify-content-between mb-3">
                 <span class="text-white-50 small text-uppercase spacing-1">Maintenance</span>
-                <i class="bi bi-wrench text-white-50"></i>
+                <i class="bi bi-plus-lg text-white"></i>
             </div>
             <h4 class="mb-0 fw-bold">1 Pending</h4>
             <div class="mt-2">
                 <small class="text-white-50">Fixing AC...</small>
             </div>
+            
+            <div class="mt-3 pt-3 border-top border-secondary">
+                <small class="text-warning"><i class="bi bi-lightning-charge-fill me-1"></i>New Request</small>
+            </div>
         </div>
-    </div>
+    </a>
+
+    <style>
+        .hover-scale { transition: transform 0.2s; }
+        .hover-scale:hover { transform: scale(1.03); cursor: pointer; }
+    </style>
 </div>
 
 {% endblock %}

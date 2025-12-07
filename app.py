@@ -26,5 +26,9 @@ def create_post():
 def post_detail(post_id):
     return render_template('resident/post_detail.html', post_id=post_id)
 
+@app.route('/maintenance/new')
+def maintenance():
+    return render_template('resident/maintenance.html')
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
