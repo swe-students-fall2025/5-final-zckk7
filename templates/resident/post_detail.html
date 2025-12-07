@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        
+        <a href="/community" class="text-decoration-none text-muted mb-3 d-inline-block">
+            <i class="bi bi-arrow-left me-1"></i> Back to feed
+        </a>
+
+        <div class="card border-0 shadow-sm overflow-hidden mb-4">
+            <img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1200" class="card-img-top" style="height: 400px; object-fit: cover;" alt="Post Image">
+            
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-secondary rounded-circle me-3" style="width: 40px; height: 40px;"></div>
+                        <div>
+                            <h6 class="fw-bold mb-0">Sarah</h6>
+                            <small class="text-muted">A-302 • 10 mins ago</small>
+                        </div>
+                    </div>
+                    <span class="badge bg-success rounded-pill px-3">Available</span>
+                </div>
+
+                <h2 class="fw-bold mb-3">Made too much pasta! 🍝</h2>
+                <p class="text-secondary lh-lg">
+                    Hi everyone! I accidentally cooked a huge pot of Bolognese sauce. It's totally fresh, made 
+                    with beef and tomatoes. I have about 2-3 portions packed in containers. 
+                    <br><br>
+                    Feel free to come by A-302 and grab one if you haven't had dinner yet!
+                </p>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm p-4">
+            <h5 class="fw-bold mb-4">Comments (2)</h5>
+
+            <div class="d-flex mb-4">
+                <div class="bg-light rounded-circle me-3 flex-shrink-0 d-flex align-items-center justify-content-center fw-bold text-secondary" style="width: 40px; height: 40px;">B</div>
+                <div>
+                    <div class="bg-light p-3 rounded-4 rounded-top-0 d-inline-block">
+                        <span class="fw-bold small d-block mb-1">Ben (B-205)</span>
+                        <p class="mb-0 small">OMG this looks delicious! Is there any left? 😋</p>
+                    </div>
+                    <small class="text-muted ms-2 mt-1 d-block" style="font-size: 0.75rem;">5 mins ago</small>
+                </div>
+            </div>
+
+            <div class="d-flex mb-4">
+                <div class="bg-secondary rounded-circle me-3 flex-shrink-0" style="width: 40px; height: 40px;"></div>
+                <div>
+                    <div class="bg-primary bg-opacity-10 p-3 rounded-4 rounded-top-0 d-inline-block text-dark">
+                        <span class="fw-bold small d-block mb-1">Sarah (Author)</span>
+                        <p class="mb-0 small">Yes Ben! Come on over, I saved one for you.</p>
+                    </div>
+                    <small class="text-muted ms-2 mt-1 d-block" style="font-size: 0.75rem;">2 mins ago</small>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex gap-2">
+                    <input type="text" class="form-control bg-light border-0 rounded-pill px-4" placeholder="Write a comment...">
+                    <button class="btn btn-dark rounded-circle" style="width: 40px; height: 40px;"><i class="bi bi-send-fill"></i></button>
+                </div>
+            </div>
+
+        </div>
+
+        <div style="height: 50px;"></div> </div>
+</div>
+{% endblock %}

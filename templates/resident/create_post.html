@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        
+        <div class="d-flex align-items-center mb-4">
+            <a href="/community" class="btn btn-light rounded-circle me-3"><i class="bi bi-arrow-left"></i></a>
+            <h4 class="fw-bold m-0">Create New Post</h4>
+        </div>
+
+        <div class="card shadow-sm border-0 p-4">
+            <form>
+                <div class="mb-4 text-center p-5 border border-2 border-dashed rounded-4 bg-light text-muted">
+                    <i class="bi bi-camera fs-1 mb-2 d-block"></i>
+                    <span class="small">Click to upload photos</span>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Title</label>
+                    <input type="text" class="form-control form-control-lg bg-light border-0" placeholder="e.g. Free Homemade Cookies">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-uppercase">Category</label>
+                    <div class="d-flex gap-2">
+                        <input type="radio" class="btn-check" name="category" id="cat1" checked>
+                        <label class="btn btn-outline-secondary rounded-pill btn-sm px-3" for="cat1">Food</label>
+
+                        <input type="radio" class="btn-check" name="category" id="cat2">
+                        <label class="btn btn-outline-secondary rounded-pill btn-sm px-3" for="cat2">Furniture</label>
+                        
+                        <input type="radio" class="btn-check" name="category" id="cat3">
+                        <label class="btn btn-outline-secondary rounded-pill btn-sm px-3" for="cat3">Other</label>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label fw-bold small text-uppercase">Description</label>
+                    <textarea class="form-control bg-light border-0" rows="5" placeholder="Describe your item, pick-up time, etc."></textarea>
+                </div>
+
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-dark btn-lg">Post to Community</button>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
