@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Smart Apartment - Admin Portal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Smart Apartment</h1>
+        <p class="sidebar-subtitle">Admin Portal</p>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-section="overview">Overview</button>
+        <button class="nav-item" data-section="sensors">Sensors & Rooms</button>
+        <button class="nav-item" data-section="alerts">Alerts</button>
+        <button class="nav-item" data-section="maintenance">Maintenance</button>
+        <button class="nav-item" data-section="packages">Packages</button>
+        <button class="nav-item" data-section="community">Community</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="admin-user">
+          <span class="admin-name">Admin</span>
+          <span class="admin-role">Building Manager</span>
+        </div>
+        <!-- logout link -->
+        <a href="{{ url_for('logout') }}" class="logout-link">Log out</a>
+        <!-- <a href="/logout" class="logout-link">Log out</a> -->
+      </div>
+    </aside>
+
+
+    <main class="main">
+      <header class="main-header">
+        <h2 id="section-title">Overview</h2>
+        <span id="section-subtitle" class="section-subtitle">
+          Building status at a glance
+        </span>
+      </header>
+
+      <section id="section-content">
+
+        
+        <!-- ================= Overview ================= -->
+        <section id="section-overview" class="section visible">
+          <div class="cards-row">
+            <div class="card metric-card">
+              <p class="metric-label">Alerts Today</p>
+              <p class="metric-value" id="metric-alerts-total">--</p>
+            </div>
+            <div class="card metric-card">
+              <p class="metric-label">Open Alerts</p>
+              <p class="metric-value" id="metric-alerts-open">--</p>
+            </div>
+            <div class="card metric-card">
+              <p class="metric-label">Open Maintenance</p>
+              <p class="metric-value" id="metric-maintenance-open">--</p>
+            </div>
+            <div class="card metric-card">
+              <p class="metric-label">Unpicked Packages</p>
+              <p class="metric-value" id="metric-packages-unpicked">--</p>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3>Recent Alerts</h3>
+              </div>
+              <div class="card-body">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Severity</th>
+                      <th>Location</th>
+                      <th>Time</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="overview-alerts-body">
+                    <!-- JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>Recent Maintenance Requests</h3>
+              </div>
+              <div class="card-body">
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th>Apartment</th>
+                      <th>Category</th>
+                      <th>Status</th>
+                      <th>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody id="overview-maintenance-body">
+                    <!-- JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Sensors & Rooms ================= -->
+        <section id="section-sensors" class="section">
+          <div class="layout-rooms">
+            <div class="card rooms-list">
+              <div class="card-header">
+                <h3>Rooms</h3>
+                <input
+                  type="text"
+                  id="rooms-search"
+                  class="input"
+                  placeholder="Search by apartment or room..."
+                />
+              </div>
+              <div class="card-body">
+                <ul id="rooms-list" class="list">
+                  <!-- JS -->
+                </ul>
+              </div>
+            </div>
+
+            <div class="card room-detail">
+              <div class="card-header">
+                <h3 id="room-detail-title">Select a room</h3>
+                <span id="room-detail-subtitle" class="muted">
+                  Click on a room on the left to view details.
+                </span>
+              </div>
+              <div class="card-body" id="room-detail-body">
+                <!-- JS -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Alerts ================= -->
+        <section id="section-alerts" class="section">
+          <div class="card">
+            <div class="card-header header-with-filters">
+              <div>
+                <h3>Alerts</h3>
+                <span class="muted">Filter and manage safety alerts</span>
+              </div>
+              <div class="filters">
+                <select id="filter-alerts-severity" class="input">
+                  <option value="">Severity</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <select id="filter-alerts-status" class="input">
+                  <option value="">Status</option>
+                  <option value="open">Open</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="ignored">Ignored</option>
+                </select>
+                <button id="btn-alerts-refresh" class="btn secondary">Refresh</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>Severity</th>
+                    <th>Location</th>
+                    <th>Time</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="alerts-table-body">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Maintenance ================= -->
+        <section id="section-maintenance" class="section">
+          <div class="card">
+            <div class="card-header header-with-filters">
+              <div>
+                <h3>Maintenance Requests</h3>
+                <span class="muted">View and update maintenance tasks</span>
+              </div>
+              <div class="filters">
+                <select id="filter-maintenance-status" class="input">
+                  <option value="">Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+                <button id="btn-maintenance-refresh" class="btn secondary">Refresh</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Apartment</th>
+                    <th>Resident</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="maintenance-table-body">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Packages ================= -->
+        <section id="section-packages" class="section">
+          <div class="card">
+            <div class="card-header header-with-filters">
+              <div>
+                <h3>Packages</h3>
+                <span class="muted">Track deliveries and pickups</span>
+              </div>
+              <div class="filters">
+                <select id="filter-packages-status" class="input">
+                  <option value="">Status</option>
+                  <option value="arrived">Arrived</option>
+                  <option value="notified">Notified</option>
+                  <option value="picked_up">Picked up</option>
+                </select>
+                <button id="btn-packages-refresh" class="btn secondary">Refresh</button>
+                <button id="btn-package-new" class="btn primary">Add Package</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Resident</th>
+                    <th>Apartment</th>
+                    <th>Carrier</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Arrived</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="packages-table-body">
+                  <!-- JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="package-modal" class="modal hidden">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h3>New Package</h3>
+                <button id="package-modal-close" class="btn small">✕</button>
+              </div>
+              <div class="modal-body">
+                <div class="form-row">
+                  <label>Resident ID</label>
+                  <input type="text" id="package-resident-id" class="input" />
+                </div>
+                <div class="form-row">
+                  <label>Carrier</label>
+                  <input type="text" id="package-carrier" class="input" placeholder="UPS, FedEx, ..." />
+                </div>
+                <div class="form-row">
+                  <label>Location</label>
+                  <input type="text" id="package-location" class="input" placeholder="Mailroom A" />
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button id="package-modal-save" class="btn primary">Save</button>
+                <button id="package-modal-cancel" class="btn secondary">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= Community ================= -->
+        <section id="section-community" class="section">
+          <div class="card">
+            <div class="card-header header-with-filters">
+              <div>
+                <h3>Community Posts</h3>
+                <span class="muted">Moderate community exchange posts</span>
+              </div>
+              <div class="filters">
+                <select id="filter-community-status" class="input">
+                  <option value="">Status</option>
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <select id="filter-community-category" class="input">
+                  <option value="">Category</option>
+                  <option value="furniture">Furniture</option>
+                  <option value="food">Food</option>
+                  <option value="supplies">Supplies</option>
+                  <option value="other">Other</option>
+                </select>
+                <button id="btn-community-refresh" class="btn secondary">Refresh</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Resident</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="community-table-body">
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+</html>
