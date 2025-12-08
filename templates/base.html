@@ -38,15 +38,23 @@
         .btn-primary:hover {
             background-color: #333;
         }
-        .nav-link { color: #6b7280 !important; font-weight: 500; }
-        .nav-link.active { color: #111 !important; border-bottom: 2px solid #111; }
+        .nav-link { 
+            color: #6b7280 !important; 
+            font-weight: 500; 
+        }
+        .nav-link.active { 
+            color: #111 !important; 
+            border-bottom: 2px solid #111; 
+        }
     </style>
 </head>
 <body>
 
     <nav class="navbar navbar-expand-lg fixed-top border-bottom">
         <div class="container">
-            <a class="navbar-brand fw-bold" href="#" style="letter-spacing: -1px;">LUMINA<span class="text-primary">.</span></a>
+            <a class="navbar-brand fw-bold" href="{{ url_for('dashboard') }}" style="letter-spacing: -1px;">
+                LUMINA<span class="text-primary">.</span>
+            </a>
             
             <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -55,23 +63,40 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav mx-auto">
                     <li class="nav-item px-3">
-                        <a class="nav-link {% if request.endpoint == 'dashboard' or request.endpoint == 'index' %}active{% endif %}" 
-                        href="/dashboard">Overview</a>
+                        <a 
+                            class="nav-link {% if request.endpoint == 'dashboard' or request.endpoint == 'index' %}active{% endif %}" 
+                            href="{{ url_for('dashboard') }}"
+                        >
+                            Overview
+                        </a>
                     </li>
 
                     <li class="nav-item px-3">
-                        <a class="nav-link {% if request.endpoint == 'packages' %}active{% endif %}" 
-                        href="/packages">Deliveries</a>
+                        <a 
+                            class="nav-link {% if request.endpoint == 'packages' %}active{% endif %}" 
+                            href="{{ url_for('packages') }}"
+                        >
+                            Deliveries
+                        </a>
                     </li>
 
                     <li class="nav-item px-3">
-                        <a class="nav-link {% if 'community' in request.endpoint or 'post' in request.endpoint %}active{% endif %}" 
-                        href="/community">Community</a>
+                        <a 
+                            class="nav-link {% if 'community' in request.endpoint or 'post' in request.endpoint %}active{% endif %}" 
+                            href="{{ url_for('community') }}"
+                        >
+                            Community
+                        </a>
                     </li>
                 </ul>
                 <div class="d-flex align-items-center">
                     <span class="text-muted small me-3">Apt. 101</span>
-                    <div class="bg-secondary rounded-circle" style="width: 32px; height: 32px; background-image: url('https://placehold.co/100x100'); background-size: cover;"></div>
+                    <div class="bg-secondary rounded-circle me-2" 
+                         style="width: 32px; height: 32px; background-image: url('https://placehold.co/100x100'); background-size: cover;">
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary btn-sm">
+                        Logout
+                    </a>
                 </div>
             </div>
         </div>
