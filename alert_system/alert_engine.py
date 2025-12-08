@@ -64,9 +64,7 @@ def run_engine():
                             "room": reading.get("room"),
                             "type": alert_data["type"],
                             "status": "new",
-                            "timestamp": {
-                                "$gte": cutoff_time - timedelta(minutes=5)
-                            },  # Don't repeat for 5 mins
+                            "timestamp": {"$gte": cutoff_time - timedelta(minutes=5)},
                         }
                     )
                     if not existing_alert:
