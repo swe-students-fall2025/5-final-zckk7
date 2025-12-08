@@ -1,0 +1,7 @@
+services:
+  alert_engine:
+    build: ./alert_system
+    container_name: smart_apartment_alert_engine
+    environment:
+      - MONGO_URI=mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0
+    restart: always
