@@ -77,7 +77,7 @@ def run_engine():
                         db.alerts.insert_one(new_alert)
                         print(f"Alert: {alert_data['message']}")
             time.sleep(5)
-        except Exception as e:  # pylint: disable=broad-exception-caught
+        except Exception as e:
             print(f"Error in engine loop: {e}")
             time.sleep(5)
 
