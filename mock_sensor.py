@@ -1,5 +1,3 @@
-"""Mock Sensor Data Sender."""
-
 from datetime import datetime
 from pymongo import MongoClient
 
@@ -10,7 +8,6 @@ db = client.smart_apartment_db
 
 
 def trigger_fire():
-    """Simulate a high temperature warning."""
     print("Simulating fire...")
     reading = {
         "timestamp": datetime.utcnow(),

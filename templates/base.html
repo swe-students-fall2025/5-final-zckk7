@@ -90,7 +90,7 @@
                     </li>
                 </ul>
                 <div class="d-flex align-items-center">
-                    <span class="text-muted small me-3">Apt. 101</span>
+                    <span class="text-muted small me-3">Apt. {{ session.apartment_number if session.apartment_number else '' }}</span>
                     <div class="bg-secondary rounded-circle me-2" 
                          style="width: 32px; height: 32px; background-image: url('https://placehold.co/100x100'); background-size: cover;">
                     </div>
