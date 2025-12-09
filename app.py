@@ -33,6 +33,16 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def convert_objectid_to_str(obj):
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: convert_objectid_to_str(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [convert_objectid_to_str(item) for item in obj]
+    return obj
+
+
 @app.route("/")
 def index():
     if "username" not in session:
@@ -645,18 +655,28 @@ def admin_overview():
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
-        alerts = list(db.alerts.find({"status": "new"})) if db.alerts else []
-        open_alerts = list(db.alerts.find({"status": "open"})) if db.alerts else []
-        maintenance = list(db.maintenance_requests.find({"status": {"$ne": "resolved"}})) if db.maintenance_requests else []
-        unpicked_packages = list(db.packages.find({"status": {"$ne": "picked_up"}})) if db.packages else []
+        alerts_today = list(db.alerts.find({"status": "new"}))
+        open_alerts = list(db.alerts.find({"status": {"$in": ["new", "open"]}}))
+        maintenance = list(db.maintenance_requests.find({"status": {"$ne": "resolved"}}))
+        unpicked_packages = list(db.packages.find({"status": {"$ne": "picked_up"}}))
         
-        recent_alerts = list(db.alerts.find().sort("created_at", -1).limit(5)) if db.alerts else []
-        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5)) if db.maintenance_requests else []
+        print(f"Admin overview - alerts_today: {len(alerts_today)}, open_alerts: {len(open_alerts)}, maintenance: {len(maintenance)}, packages: {len(unpicked_packages)}")
+        
+        recent_alerts_query = db.alerts.find()
+        recent_alerts_query = recent_alerts_query.sort("timestamp", -1)
+        recent_alerts = list(recent_alerts_query.limit(5))
+        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5))
+        
+        print(f"Admin overview - recent_alerts: {len(recent_alerts)}, recent_maintenance: {len(recent_maintenance)}")
         
         for alert in recent_alerts:
             alert["_id"] = str(alert["_id"])
             alert["alert_id"] = str(alert["_id"])
-            if "created_at" in alert and isinstance(alert["created_at"], datetime):
+            if "reading_id" in alert:
+                alert["reading_id"] = str(alert["reading_id"])
+            if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
+                alert["created_at"] = alert["timestamp"].isoformat()
+            elif "created_at" in alert and isinstance(alert["created_at"], datetime):
                 alert["created_at"] = alert["created_at"].isoformat()
         
         for req in recent_maintenance:
@@ -667,21 +687,25 @@ def admin_overview():
             if "created_at" in req and isinstance(req["created_at"], datetime):
                 req["created_at"] = req["created_at"].isoformat()
         
-        return jsonify({
+        response_data = {
             "data": {
                 "counts": {
-                    "alerts_total": len(alerts),
-                    "alerts_open": len(open_alerts),
+                    "alerts_total_today": len(alerts_today),
+                    "alerts_unresolved": len(open_alerts),
                     "maintenance_open": len(maintenance),
                     "packages_unpicked": len(unpicked_packages)
                 },
-                "recent_alerts": recent_alerts,
-                "recent_maintenance": recent_maintenance
+                "recent_alerts": convert_objectid_to_str(recent_alerts),
+                "recent_maintenance": convert_objectid_to_str(recent_maintenance)
             }
-        })
+        }
+        
+        return jsonify(response_data)
     except Exception as e:
+        import traceback
         print(f"Error loading overview: {e}")
-        return jsonify({"error": "Failed to load overview"}), 500
+        print(traceback.format_exc())
+        return jsonify({"error": f"Failed to load overview: {str(e)}"}), 500
 
 
 @app.route("/api/admin/alerts", methods=["GET"])
@@ -702,14 +726,20 @@ def admin_alerts():
         if status:
             query["status"] = status
         
-        alerts = list(db.alerts.find(query).sort("created_at", -1)) if db.alerts else []
+        alerts_query = db.alerts.find(query)
+        alerts_query = alerts_query.sort("timestamp", -1)
+        alerts = list(alerts_query)
         for alert in alerts:
             alert["_id"] = str(alert["_id"])
             alert["alert_id"] = str(alert["_id"])
-            if "created_at" in alert and isinstance(alert["created_at"], datetime):
+            if "reading_id" in alert:
+                alert["reading_id"] = str(alert["reading_id"])
+            if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
+                alert["created_at"] = alert["timestamp"].isoformat()
+            elif "created_at" in alert and isinstance(alert["created_at"], datetime):
                 alert["created_at"] = alert["created_at"].isoformat()
         
-        return jsonify({"data": alerts})
+        return jsonify({"data": convert_objectid_to_str(alerts)})
     except Exception as e:
         print(f"Error loading alerts: {e}")
         return jsonify({"error": "Failed to load alerts"}), 500
@@ -733,7 +763,7 @@ def update_alert_status(alert_id):
         result = db.alerts.update_one(
             {"_id": ObjectId(alert_id)},
             {"$set": {"status": new_status}}
-        ) if db.alerts else None
+        )
         
         if not result or result.matched_count == 0:
             return jsonify({"error": "Alert not found"}), 404
@@ -813,12 +843,92 @@ def admin_rooms():
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
-        rooms = list(db.rooms.find()) if db.rooms else []
-        for room in rooms:
-            room["_id"] = str(room["_id"])
-            room["room_id"] = str(room["_id"])
+        rooms_list = []
         
-        return jsonify({"data": rooms})
+        rooms_from_db = list(db.rooms.find())
+        print(f"Admin rooms - found {len(rooms_from_db)} rooms in db.rooms collection")
+        if rooms_from_db:
+            for room in rooms_from_db:
+                room_id_str = str(room["_id"])
+                room_data = {
+                    "_id": room_id_str,
+                    "room_id": room_id_str,
+                    "apartment_id": room.get("apartment_id", room.get("apartment", "")),
+                    "room_name": room.get("room_name", room.get("room", ""))
+                }
+                
+                latest_reading = db.sensor_readings.find_one(
+                    {"room_id": room.get("room_id") or room.get("_id")},
+                    sort=[("timestamp", -1)]
+                )
+                
+                if latest_reading:
+                    room_data["latest_readings"] = {
+                        "temperature": {
+                            "timestamp": latest_reading.get("timestamp").isoformat() if isinstance(latest_reading.get("timestamp"), datetime) else str(latest_reading.get("timestamp", "")),
+                            "value": latest_reading.get("temperature", latest_reading.get("value", 0))
+                        }
+                    }
+                
+                rooms_list.append(convert_objectid_to_str(room_data))
+        else:
+            sensor_readings_count = db.sensor_readings.count_documents({})
+            print(f"Admin rooms - found {sensor_readings_count} sensor_readings in database")
+            
+            try:
+                unique_rooms = list(db.sensor_readings.aggregate([
+                    {"$group": {
+                        "_id": {
+                            "apartment_id": "$apartment_id",
+                            "room": "$room"
+                        }
+                    }},
+                    {"$sort": {"_id.apartment_id": 1, "_id.room": 1}}
+                ]))
+                print(f"Admin rooms - aggregated {len(unique_rooms)} unique rooms from sensor_readings")
+            except Exception as agg_error:
+                print(f"Admin rooms - aggregation error: {agg_error}")
+                unique_rooms = []
+            
+            for room_group in unique_rooms:
+                apartment_id = room_group["_id"].get("apartment_id", "")
+                room_name = room_group["_id"].get("room", "")
+                
+                if not apartment_id or not room_name:
+                    continue
+                
+                room_id = f"{apartment_id}_{room_name}".replace(" ", "_")
+                
+                latest_temp = db.sensor_readings.find_one(
+                    {"apartment_id": apartment_id, "room": room_name, "sensor_type": "temperature"},
+                    sort=[("timestamp", -1)]
+                )
+                
+                room_data = {
+                    "room_id": room_id,
+                    "apartment_id": apartment_id,
+                    "room_name": room_name
+                }
+                
+                if latest_temp:
+                    temp_value = latest_temp.get("value", 0)
+                    timestamp = latest_temp.get("timestamp")
+                    if isinstance(timestamp, datetime):
+                        timestamp_str = timestamp.isoformat()
+                    else:
+                        timestamp_str = str(timestamp) if timestamp else ""
+                    
+                    room_data["latest_readings"] = {
+                        "temperature": {
+                            "timestamp": timestamp_str,
+                            "value": temp_value
+                        }
+                    }
+                
+                rooms_list.append(convert_objectid_to_str(room_data))
+        
+        print(f"Admin rooms - found {len(rooms_list)} rooms")
+        return jsonify({"data": rooms_list})
     except Exception as e:
         print(f"Error loading rooms: {e}")
         return jsonify({"error": "Failed to load rooms"}), 500
@@ -833,13 +943,50 @@ def admin_room_history(room_id):
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
-        history = list(db.sensor_readings.find({"room_id": room_id}).sort("timestamp", -1).limit(100)) if db.sensor_readings else []
-        for reading in history:
-            reading["_id"] = str(reading["_id"])
-            if "timestamp" in reading and isinstance(reading["timestamp"], datetime):
-                reading["timestamp"] = reading["timestamp"].isoformat()
+        room_parts = room_id.rsplit("_", 1)
+        if len(room_parts) == 2:
+            apartment_id, room_name = room_parts
+            room_name = room_name.replace("_", " ")
+        else:
+            return jsonify({"error": "Invalid room_id format"}), 400
         
-        return jsonify({"data": {"readings": history}})
+        all_readings = list(db.sensor_readings.find(
+            {"apartment_id": apartment_id, "room": room_name}
+        ).sort("timestamp", -1).limit(100))
+        
+        readings_by_timestamp = {}
+        for reading in all_readings:
+            timestamp = reading.get("timestamp")
+            if isinstance(timestamp, datetime):
+                timestamp_key = timestamp.isoformat()
+            else:
+                timestamp_key = str(timestamp) if timestamp else ""
+            
+            if timestamp_key not in readings_by_timestamp:
+                readings_by_timestamp[timestamp_key] = {
+                    "timestamp": timestamp_key,
+                    "temperature": None,
+                    "smoke": None,
+                    "noise": None,
+                    "motion": None
+                }
+            
+            sensor_type = reading.get("sensor_type", "")
+            value = reading.get("value", 0)
+            
+            if sensor_type == "temperature":
+                readings_by_timestamp[timestamp_key]["temperature"] = value
+            elif sensor_type == "smoke":
+                readings_by_timestamp[timestamp_key]["smoke"] = value
+            elif sensor_type == "noise":
+                readings_by_timestamp[timestamp_key]["noise"] = value
+            elif sensor_type == "motion":
+                readings_by_timestamp[timestamp_key]["motion"] = bool(value)
+        
+        history = list(readings_by_timestamp.values())
+        history.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return jsonify({"data": {"readings": convert_objectid_to_str(history)}})
     except Exception as e:
         print(f"Error loading room history: {e}")
         return jsonify({"error": "Failed to load room history"}), 500

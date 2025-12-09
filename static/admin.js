@@ -1,4 +1,11 @@
-const USE_MOCK = false;
+const USE_MOCK = {
+  overview: false,
+  alerts: true,
+  rooms: true,
+  maintenance: false,
+  packages: false,
+  community: false
+};
 
 const mock = {
   alerts: [
@@ -267,15 +274,27 @@ function setupLogout() {
 async function loadOverview() {
   try {
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.overview) {
       data = buildOverviewFromMock();
     } else {
       const res = await fetch("/api/admin/overview", {
         credentials: "same-origin"
       });
-      if (!res.ok) throw new Error("Failed to load overview");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load overview");
+      }
       const payload = await res.json();
+      console.log("Overview API response:", payload);
       data = payload.data || payload;
+      console.log("Overview data:", data);
+      
+      if (USE_MOCK.alerts) {
+        const mockData = buildOverviewFromMock();
+        data.counts.alerts_total_today = mockData.counts.alerts_total_today;
+        data.counts.alerts_unresolved = mockData.counts.alerts_unresolved;
+        data.recent_alerts = mockData.recent_alerts;
+      }
     }
 
     document.getElementById("metric-alerts-total").textContent =
@@ -316,7 +335,8 @@ async function loadOverview() {
       maintBody.appendChild(tr);
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
@@ -348,14 +368,21 @@ let roomsCache = [];
 async function loadRooms() {
   try {
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.rooms) {
       data = mock.rooms;
     } else {
       const res = await fetch("/api/admin/rooms", {
         credentials: "same-origin"
       });
-      if (!res.ok) throw new Error("Failed to load rooms");
-      data = (await res.json()).data;
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Rooms API error:", errorData);
+        throw new Error(errorData.error || "Failed to load rooms");
+      }
+      const payload = await res.json();
+      console.log("Rooms API response:", payload);
+      data = payload.data || payload;
+      console.log("Rooms data:", data);
     }
     roomsCache = data || [];
     renderRoomsList(roomsCache);
@@ -378,7 +405,8 @@ async function loadRooms() {
       });
     }
   } catch (err) {
-    console.error(err);
+    console.error("Error loading rooms:", err);
+    alert("Failed to load rooms: " + err.message);
   }
 }
 
@@ -430,7 +458,7 @@ async function loadRoomDetail(roomId) {
 
   try {
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.rooms) {
       data = { readings: mock.roomHistories[roomId] || [] };
     } else {
       const res = await fetch(
@@ -503,7 +531,7 @@ async function loadAlerts() {
     const status = document.getElementById("filter-alerts-status").value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.alerts) {
       data = mock.alerts.filter((a) => {
         if (severity && a.severity !== severity) return false;
         if (status && a.status !== status) return false;
@@ -551,13 +579,14 @@ async function loadAlerts() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updateAlertStatus(alertId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.alerts) {
       const a = mock.alerts.find((x) => x.alert_id === alertId);
       if (a) a.status = status;
     } else {
@@ -576,7 +605,8 @@ async function updateAlertStatus(alertId, status) {
     loadAlerts();
     loadOverview();
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
@@ -588,7 +618,7 @@ async function loadMaintenance() {
     ).value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.maintenance) {
       data = mock.maintenance.filter((m) =>
         status ? m.status === status : true
       );
@@ -642,13 +672,14 @@ async function loadMaintenance() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updateMaintenanceStatus(requestId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.maintenance) {
       const r = mock.maintenance.find((x) => x.request_id === requestId);
       if (r) r.status = status;
     } else {
@@ -719,7 +750,7 @@ function setupPackagesModal() {
       }
 
       try {
-        if (USE_MOCK) {
+        if (USE_MOCK.packages) {
           const newPkg = {
             package_id: "mock-" + Date.now(),
             resident_name: `Resident ${residentId}`,
@@ -778,7 +809,7 @@ async function loadPackages() {
       document.getElementById("filter-packages-status").value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.packages) {
       data = mock.packages.filter((p) =>
         status ? p.status === status : true
       );
@@ -851,13 +882,14 @@ async function loadPackages() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updatePackageStatus(packageId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.packages) {
       const p = mock.packages.find((x) => x.package_id === packageId);
       if (p) p.status = status;
     } else {
@@ -890,7 +922,7 @@ async function updatePackageStatus(packageId, status) {
 
 async function deletePackage(packageId) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.packages) {
       const idx = mock.packages.findIndex((x) => x.package_id === packageId);
       if (idx >= 0) mock.packages.splice(idx, 1);
     } else {
@@ -925,7 +957,7 @@ async function loadCommunityPosts() {
       document.getElementById("filter-community-category").value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.community) {
       data = mock.community.filter((p) => {
         if (status && p.status !== status) return false;
         if (category && p.category !== category) return false;
@@ -985,13 +1017,14 @@ async function loadCommunityPosts() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updateCommunityPostStatus(postId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.community) {
       const p = mock.community.find((x) => x.post_id === postId);
       if (p) p.status = status;
     } else {
@@ -1009,13 +1042,14 @@ async function updateCommunityPostStatus(postId, status) {
     }
     loadCommunityPosts();
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function deleteCommunityPost(postId) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.community) {
       const idx = mock.community.findIndex((x) => x.post_id === postId);
       if (idx >= 0) mock.community.splice(idx, 1);
     } else {
