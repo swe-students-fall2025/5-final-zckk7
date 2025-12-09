@@ -11,8 +11,10 @@
         <div class="card mb-4">
             <div class="list-group list-group-flush rounded-3">
                 {% if packages %}
+                    {% set has_ready = [] %}
                     {% for package in packages %}
                         {% if package.status == 'ready' %}
+                            {% set _ = has_ready.append(1) %}
                         <div class="list-group-item p-4 d-flex justify-content-between align-items-center border-0">
                             <div class="d-flex align-items-center">
                                 <div class="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
@@ -26,6 +28,7 @@
                             <button class="btn btn-dark btn-sm rounded-pill px-3">View Code</button>
                         </div>
                         {% elif package.status == 'processing' %}
+                            {% set _ = has_ready.append(1) %}
                         <div class="list-group-item p-4 d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <div class="bg-warning bg-opacity-10 text-warning rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 50px; height: 50px;">
@@ -40,7 +43,7 @@
                         </div>
                         {% endif %}
                     {% endfor %}
-                    {% if not any(p.status == 'ready' or p.status == 'processing' for p in packages) %}
+                    {% if not has_ready %}
                     <div class="list-group-item p-4 text-center text-muted">
                         No packages ready for pickup
                     </div>

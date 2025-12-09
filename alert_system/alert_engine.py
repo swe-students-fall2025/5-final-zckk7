@@ -1,5 +1,3 @@
-"""Alert Engine Module."""
-
 import os
 import time
 from datetime import datetime, timedelta
@@ -14,7 +12,6 @@ print("Connected to MongoDB.")
 
 
 def check_rules(reading):
-    """Check sensor reading against safety rules."""
     sensor_type = reading.get("sensor_type")
     value = reading.get("value")
     room = reading.get("room")
@@ -47,7 +44,6 @@ def check_rules(reading):
 
 
 def run_engine():
-    """Main execution loop."""
     print("Alert Engine running...")
     while True:
         try:

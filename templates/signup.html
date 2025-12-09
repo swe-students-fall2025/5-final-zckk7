@@ -38,9 +38,8 @@
       box-shadow: 0 0 0 4px rgba(0,0,0,0.05);
       border-color: #000;
     }
-    /* 角色选择卡片的特殊样式 */
     .btn-check:checked + .btn-outline-light {
-      background-color: #eff6ff; /* 浅蓝色背景 */
+      background-color: #eff6ff;
       border-color: #000;
       color: #000;
     }
@@ -76,22 +75,27 @@
             <div class="row g-3 mb-3">
               <div class="col-6">
                 <label class="form-label small fw-bold text-uppercase text-muted" style="font-size: 0.7rem;">First Name</label>
-                <input type="text" name="first_name" class="form-control rounded-3" placeholder="Alex" required>
+                <input type="text" name="first_name" class="form-control rounded-3" placeholder="Enter your first name" required autocomplete="given-name" oninvalid="this.setCustomValidity('Please enter your first name')" oninput="this.setCustomValidity('')">
               </div>
               <div class="col-6">
                 <label class="form-label small fw-bold text-uppercase text-muted" style="font-size: 0.7rem;">Last Name</label>
-                <input type="text" name="last_name" class="form-control rounded-3" placeholder="Doe" required>
+                <input type="text" name="last_name" class="form-control rounded-3" placeholder="Enter your last name" required autocomplete="family-name" oninvalid="this.setCustomValidity('Please enter your last name')" oninput="this.setCustomValidity('')">
               </div>
             </div>
 
             <div class="mb-3">
+              <label class="form-label small fw-bold text-uppercase text-muted" style="font-size: 0.7rem;">Apartment Number</label>
+              <input type="text" name="apartment_number" class="form-control rounded-3" placeholder="e.g. 4D, 5C" required pattern="[0-9]+[A-Za-z]" title="Format: number followed by letter (e.g., 4D, 5C)" oninvalid="this.setCustomValidity('Please enter your apartment number (e.g., 4D, 5C)')" oninput="this.setCustomValidity('')">
+            </div>
+
+            <div class="mb-3">
               <label class="form-label small fw-bold text-uppercase text-muted" style="font-size: 0.7rem;">Username</label>
-              <input type="text" name="username" class="form-control rounded-3" placeholder="Choose a username" required minlength="3">
+              <input type="text" name="username" class="form-control rounded-3" placeholder="Choose a username" required minlength="3" autocomplete="username" oninvalid="this.setCustomValidity('Username must be at least 3 characters')" oninput="this.setCustomValidity('')">
             </div>
 
             <div class="mb-4">
               <label class="form-label small fw-bold text-uppercase text-muted" style="font-size: 0.7rem;">Password</label>
-              <input type="password" name="password" class="form-control rounded-3" placeholder="Min. 6 characters" required minlength="6">
+              <input type="password" name="password" class="form-control rounded-3" placeholder="Min. 6 characters" required minlength="6" autocomplete="new-password" oninvalid="this.setCustomValidity('Password must be at least 6 characters')" oninput="this.setCustomValidity('')">
             </div>
 
             <div class="mb-4">
