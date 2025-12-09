@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        
+        <a href="/community" class="text-decoration-none text-muted mb-3 d-inline-block">
+            <i class="bi bi-arrow-left me-1"></i> Back to feed
+        </a>
+
+        <div class="card border-0 shadow-sm overflow-hidden mb-4">
+            {% if post.image_url %}
+            <img src="{{ post.image_url }}" class="card-img-top" style="height: 400px; object-fit: cover;" alt="Post Image">
+            {% endif %}
+            
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-secondary rounded-circle me-3" style="width: 40px; height: 40px;"></div>
+                        <div>
+                            <h6 class="fw-bold mb-0">{{ post.author }}</h6>
+                            <small class="text-muted">{{ post.author_apt }} • {{ post.time_ago }}</small>
+                        </div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        {% if post.category == 'Food' %}
+                        <span class="badge bg-success rounded-pill px-3">Free Food</span>
+                        {% elif post.category == 'Furniture' %}
+                        <span class="badge bg-warning text-dark rounded-pill px-3">For Sale</span>
+                        {% elif post.category == 'Other' or not post.category %}
+                        <span class="badge bg-primary rounded-pill px-3">Help Needed</span>
+                        {% endif %}
+                        {% if is_author %}
+                        <button type="button" class="btn btn-sm btn-outline-danger rounded-pill" data-bs-toggle="modal" data-bs-target="#deleteModal{{ post._id }}">
+                            <i class="bi bi-trash"></i> Delete
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <h2 class="fw-bold mb-3">{{ post.title }}</h2>
+                <p class="text-secondary lh-lg">{{ post.description|replace('\n', '<br>')|safe }}</p>
+                
+                {% if is_author %}
+                <div class="mt-4 pt-3 border-top">
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ post._id }}">
+                        <i class="bi bi-trash"></i> Delete Post
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm p-4">
+            <h5 class="fw-bold mb-4">Comments ({{ comments|length }})</h5>
+
+            {% if comments %}
+                {% for comment in comments %}
+                <div class="d-flex mb-4">
+                    <div class="bg-light rounded-circle me-3 flex-shrink-0 d-flex align-items-center justify-content-center fw-bold text-secondary" style="width: 40px; height: 40px;">{{ comment.author[0]|upper }}</div>
+                    <div>
+                        <div class="bg-light p-3 rounded-4 rounded-top-0 d-inline-block">
+                            <span class="fw-bold small d-block mb-1">{{ comment.author }} ({{ comment.author_apt }})</span>
+                            <p class="mb-0 small">{{ comment.content }}</p>
+                        </div>
+                        <small class="text-muted ms-2 mt-1 d-block" style="font-size: 0.75rem;">{{ comment.time_ago }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">No comments yet. Be the first to comment!</p>
+            {% endif %}
+
+            <div class="mt-4 pt-3 border-top">
+                <form method="POST" action="/community/post/{{ post._id }}/comment">
+                    <div class="d-flex gap-2">
+                        <input type="text" name="content" class="form-control bg-light border-0 rounded-pill px-4" placeholder="Write a comment..." required>
+                        <button type="submit" class="btn btn-dark rounded-circle" style="width: 40px; height: 40px;"><i class="bi bi-send-fill"></i></button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+
+        <div style="height: 50px;"></div> </div>
+</div>
+
+{% if is_author %}
+<div class="modal fade" id="deleteModal{{ post._id }}" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 16px;">
+            <div class="modal-body p-4 text-center">
+                <div class="mb-4">
+                    <div class="bg-danger bg-opacity-10 rounded-circle d-inline-flex align-items-center justify-content-center" style="width: 64px; height: 64px;">
+                        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+                <h5 class="fw-bold mb-3">Delete Post?</h5>
+                <p class="text-muted mb-4">Are you sure you want to delete "<strong>{{ post.title }}</strong>"?<br>This action cannot be undone and all comments will be removed.</p>
+                <div class="d-flex gap-3 justify-content-center">
+                    <button type="button" class="btn btn-light px-4 rounded-pill" data-bs-dismiss="modal">Cancel</button>
+                    <form method="POST" action="/community/post/{{ post._id }}/delete" class="d-inline">
+                        <button type="submit" class="btn btn-danger px-4 rounded-pill">
+                            <i class="bi bi-trash"></i> Delete Post
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
