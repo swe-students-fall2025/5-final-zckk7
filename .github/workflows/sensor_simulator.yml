@@ -1,0 +1,47 @@
+name: Sensor Simulator CI/CD
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'sensor_simulator/**'
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -r sensor_simulator/requirements.txt
+          pip install pytest pytest-cov
+      - name: Run tests
+        run: |
+          pytest sensor_simulator/tests/ -v --cov=sensor_simulator --cov-report=xml --cov-report=term
+      - name: Check coverage
+        run: |
+          coverage report --fail-under=80
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - uses: actions/checkout@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: ./sensor_simulator
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/smart-apartment-simulator:latest
+

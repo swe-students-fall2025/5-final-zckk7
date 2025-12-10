@@ -7,4 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "-m", "sensor_simulator"]
+EXPOSE 5001
+
+CMD ["python", "app.py"]
+
