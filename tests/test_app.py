@@ -752,6 +752,222 @@ class TestApp(unittest.TestCase):
             'status': 'resolved'
         })
         self.assertEqual(response.status_code, 404)
+    
+    @patch('app.db')
+    def test_dashboard_with_sensor_data(self, mock_db):
+        mock_db.users.find_one.return_value = {"first_name": "Test", "apartment_number": "A-101"}
+        mock_db.alerts.find.return_value = []
+        mock_sensor_data = [
+            {"sensor_type": "temperature", "value": 22.5, "timestamp": datetime.now()},
+            {"sensor_type": "smoke", "value": 0, "timestamp": datetime.now()},
+            {"sensor_type": "noise", "value": 30, "timestamp": datetime.now()},
+            {"sensor_type": "motion", "value": 1, "timestamp": datetime.now()}
+        ]
+        mock_db.sensor_readings.find.return_value = create_mock_cursor(mock_sensor_data)
+        mock_db.maintenance_requests.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+            sess['apartment_number'] = 'A-101'
+        
+        response = self.client.get('/dashboard')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_dashboard_no_apartment_id(self, mock_db):
+        mock_db.alerts.find.return_value = []
+        mock_db.maintenance_requests.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get('/dashboard')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_packages_with_arrived_at_datetime(self, mock_db):
+        from datetime import timedelta
+        now = datetime.now()
+        mock_pkg = {
+            "_id": ObjectId(),
+            "status": "arrived",
+            "arrived_at": now - timedelta(hours=12),
+            "tracking": "TRACK123"
+        }
+        mock_db.packages.find.return_value = create_mock_cursor([mock_pkg])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+            sess['apartment_number'] = 'A-101'
+        
+        response = self.client.get('/packages')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_packages_status_picked_up(self, mock_db):
+        mock_pkg = {
+            "_id": ObjectId(),
+            "status": "picked_up",
+            "arrived_at": datetime.now()
+        }
+        mock_db.packages.find.return_value = create_mock_cursor([mock_pkg])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get('/packages')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_packages_no_tracking(self, mock_db):
+        mock_pkg = {
+            "_id": ObjectId(),
+            "status": "arrived",
+            "arrived_at": datetime.now()
+        }
+        mock_db.packages.find.return_value = create_mock_cursor([mock_pkg])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get('/packages')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_overview_with_alert_data(self, mock_db):
+        alert_data = {
+            "_id": ObjectId(),
+            "type": "Fire Safety",
+            "timestamp": datetime.now(),
+            "reading_id": ObjectId()
+        }
+        mock_db.alerts.find.side_effect = [
+            [alert_data],
+            create_mock_cursor([alert_data])
+        ]
+        mock_db.maintenance_requests.find.return_value = create_mock_cursor([])
+        mock_db.packages.find.return_value = []
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.get('/api/admin/overview')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_packages_post_with_name_search(self, mock_db):
+        mock_user = {
+            "_id": ObjectId(),
+            "username": "johndoe",
+            "first_name": "John",
+            "last_name": "Doe",
+            "apartment_number": "A-101"
+        }
+        mock_db.users.find_one.return_value = mock_user
+        mock_db.packages.insert_one.return_value = MagicMock(inserted_id=ObjectId())
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.post('/api/admin/packages', json={
+            'resident_id': 'John Doe',
+            'carrier': 'UPS',
+            'location': 'Lobby'
+        })
+        self.assertEqual(response.status_code, 201)
+    
+    @patch('app.db')
+    def test_admin_packages_post_user_not_found(self, mock_db):
+        mock_db.users.find_one.return_value = None
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.post('/api/admin/packages', json={
+            'resident_id': 'nonexistent',
+            'carrier': 'UPS',
+            'location': 'Lobby'
+        })
+        self.assertEqual(response.status_code, 404)
+    
+    @patch('app.db')
+    def test_post_detail_with_comments(self, mock_db):
+        post_id = str(ObjectId())
+        mock_post = {
+            "_id": ObjectId(post_id),
+            "title": "Test Post",
+            "description": "Test",
+            "author": "testuser",
+            "created_at": datetime.now()
+        }
+        mock_comment = {
+            "_id": ObjectId(),
+            "post_id": post_id,
+            "author": "commenter",
+            "content": "Test comment",
+            "created_at": datetime.now()
+        }
+        mock_db.community_posts.find_one.return_value = mock_post
+        mock_db.comments.find.return_value = create_mock_cursor([mock_comment])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get(f'/community/post/{post_id}')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_add_comment_empty_content(self, mock_db):
+        post_id = str(ObjectId())
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.post(f'/community/post/{post_id}/comment', data={
+            'content': ''
+        }, follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+    
+    @patch('app.db')
+    def test_delete_post_not_author(self, mock_db):
+        post_id = str(ObjectId())
+        mock_db.community_posts.find_one.return_value = {
+            "_id": ObjectId(post_id),
+            "author": "otheruser"
+        }
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.post(f'/community/post/{post_id}/delete', follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+    
+    @patch('app.db')
+    def test_signup_admin_role(self, mock_db):
+        mock_db.users.find_one.return_value = None
+        mock_db.users.insert_one.return_value = MagicMock()
+        
+        with patch('app.generate_password_hash', return_value='hashed_password'):
+            response = self.client.post('/signup', data={
+                'first_name': 'Admin',
+                'last_name': 'User',
+                'username': 'adminuser',
+                'password': 'password123',
+                'apartment_number': 'A-001',
+                'role': 'admin'
+            }, follow_redirects=False)
+            self.assertEqual(response.status_code, 302)
 
 if __name__ == '__main__':
     unittest.main()
