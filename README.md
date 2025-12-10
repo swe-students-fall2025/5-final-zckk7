@@ -17,6 +17,7 @@ Smart apartment management platform with real-time sensor monitoring, automated 
 - [Krystal Lin](https://github.com/krystalll-0)
 - [Ganling Zhou](https://github.com/GanlingZ)
 - [Christine Jin](https://github.com/Christine-Jin)
+- [Hanqi Gui](https://github.com/hanqigui)
 
 ## Getting Started
 
@@ -124,3 +125,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 COPY alert_engine.py .
+
+CMD ["python", "-u", "alert_engine.py"]

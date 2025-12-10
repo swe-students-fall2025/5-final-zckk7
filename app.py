@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from pymongo import MongoClient
 from bson import ObjectId
@@ -9,29 +9,31 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "hanqi"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-"""
-MONGO_URI = "mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0"
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    db = client.smart_apartment_db
-    client.admin.command('ping')
-    print("MongoDB connected successfully")
-except Exception as e:
-    print(f"MongoDB connection failed: {e}")
-    db = None
-    client = None
-"""
+@app.after_request
+def set_no_cache(response):
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://mongo:27017")
-MONGODB_DB = os.getenv("MONGODB_DB", "smart_apartment")
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0")
+MONGODB_DB = os.getenv("MONGODB_DB", "smart_apartment_db")
 
 try:
     client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
     db = client[MONGODB_DB]
     client.admin.command("ping")
     print("MongoDB connected successfully")
+    
+    db.sensor_readings.create_index([("apartment_id", 1), ("room", 1), ("sensor_type", 1), ("timestamp", -1)])
+    db.sensor_readings.create_index([("timestamp", -1)])
+    print("MongoDB indexes ensured")
 except Exception as e:
     print(f"MongoDB connection failed: {e}")
     db = None
@@ -51,11 +53,12 @@ def allowed_file(filename):
 def convert_objectid_to_str(obj):
     if isinstance(obj, ObjectId):
         return str(obj)
-    if isinstance(obj, dict):
+    elif isinstance(obj, dict):
         return {k: convert_objectid_to_str(v) for k, v in obj.items()}
-    if isinstance(obj, list):
+    elif isinstance(obj, list):
         return [convert_objectid_to_str(item) for item in obj]
-    return obj
+    else:
+        return obj
 
 
 @app.route("/")
@@ -93,30 +96,31 @@ def dashboard():
             alerts = list(db.alerts.find({"status": "new"}))
 
             apartment_id = session.get("apartment_number", "")
-            latest_docs = []
-            if apartment_id:
-                latest_docs = list(
-                    db.sensor_readings.find({"apartment_id": apartment_id})
-                    .sort("timestamp", -1)
-                    .limit(200)
-                )
-
             latest_by_type = {}
-            for d in latest_docs:
-                st = d.get("sensor_type")
-                if st and st not in latest_by_type:
-                    latest_by_type[st] = d
-                if len(latest_by_type) >= 4:
-                    break
+            
+            if apartment_id:
+                for sensor_type in ["temperature", "smoke", "noise", "motion"]:
+                    latest = db.sensor_readings.find_one(
+                        {"apartment_id": apartment_id, "sensor_type": sensor_type},
+                        sort=[("timestamp", -1), ("_id", -1)]
+                    )
+                    if latest:
+                        latest_by_type[sensor_type] = latest
+
+            temp_reading = latest_by_type.get("temperature", {})
+            smoke_reading = latest_by_type.get("smoke", {})
+            noise_reading = latest_by_type.get("noise", {})
+            motion_reading = latest_by_type.get("motion", {})
 
             if apartment_id:
                 sensor = {
                     "apartment_id": apartment_id,
-                    "temperature": latest_by_type.get("temperature", {}).get("value"),
-                    "smoke": latest_by_type.get("smoke", {}).get("value"),
-                    "noise": latest_by_type.get("noise", {}).get("value"),
-                    "motion": latest_by_type.get("motion", {}).get("value"),
-                    "timestamp": latest_docs[0].get("timestamp") if latest_docs else None,
+                    "temperature": temp_reading.get("value") if temp_reading else None,
+                    "smoke": smoke_reading.get("value") if smoke_reading else None,
+                    "noise": noise_reading.get("value") if noise_reading else None,
+                    "motion": motion_reading.get("value") if motion_reading else None,
+                    "humidity": noise_reading.get("value") if noise_reading else None,
+                    "timestamp": temp_reading.get("timestamp") if temp_reading else None,
                 }
             else:
                 sensor = None
@@ -131,7 +135,7 @@ def dashboard():
             all_pending = list(
                 db.maintenance_requests.find(
                     {"$or": query_conditions, "status": {"$ne": "resolved"}}
-                ).sort("created_at", -1)
+                ).sort([("created_at", -1)])
             )
 
             maintenance_requests = all_pending[:1] if all_pending else []
@@ -184,7 +188,7 @@ def packages():
                 query_conditions.append({"resident_name": {"$regex": full_name.replace(" ", ".*"), "$options": "i"}})
             
             query = {"$or": query_conditions}
-            pkgs_raw = list(db.packages.find(query).sort("arrived_at", -1))
+            pkgs_raw = list(db.packages.find(query).sort([("arrived_at", -1)]))
             for pkg in pkgs_raw:
                 pkg["_id"] = str(pkg["_id"])
                 status = pkg.get("status", "arrived")
@@ -243,7 +247,7 @@ def community():
             {"description": {"$regex": search_query, "$options": "i"}}
         ]
     
-    posts = list(db.community_posts.find(query).sort("created_at", -1))
+    posts = list(db.community_posts.find(query).sort([("created_at", -1)]))
     now = datetime.now()
     username = session.get("username", "")
     for post in posts:
@@ -337,7 +341,7 @@ def post_detail(post_id):
         else:
             post["time_ago"] = "Just now"
         
-        comments = list(db.comments.find({"post_id": post_id}).sort("created_at", 1))
+        comments = list(db.comments.find({"post_id": post_id}).sort([("created_at", 1)]))
         for comment in comments:
             comment["_id"] = str(comment["_id"])
             if "created_at" in comment and comment["created_at"]:
@@ -490,7 +494,7 @@ def admin_packages():
         packages = []
         if db is not None:
             try:
-                packages = list(db.packages.find(query).sort("arrived_at", -1))
+                packages = list(db.packages.find(query).sort([("arrived_at", -1)]))
                 for pkg in packages:
                     pkg["_id"] = str(pkg["_id"])
                     pkg["package_id"] = str(pkg["_id"])
@@ -615,6 +619,8 @@ def signup():
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         apartment_number = request.form.get("apartment_number", "").strip().upper()
+        if apartment_number and not apartment_number.startswith("A-"):
+            apartment_number = "A-" + apartment_number
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "")
@@ -642,6 +648,7 @@ def signup():
                         "password": hashed_pw,
                         "role": role
                     })
+                    session.permanent = True
                     session["username"] = username
                     session["first_name"] = first_name
                     session["apartment_number"] = apartment_number
@@ -670,6 +677,7 @@ def login():
             try:
                 user = db.users.find_one({"username": username})
                 if user and check_password_hash(user["password"], password):
+                    session.permanent = True
                     session["username"] = username
                     session["first_name"] = user.get("first_name", "User")
                     session["apartment_number"] = user.get("apartment_number", "")
@@ -700,7 +708,7 @@ def api_latest_sensor_readings():
         return jsonify({"error": "Database unavailable"}), 500
 
     limit = int(request.args.get("limit", 50))
-    docs = list(db.sensor_readings.find({}).sort("timestamp", -1).limit(limit))
+    docs = list(db.sensor_readings.find({}).sort([("timestamp", -1)]).limit(limit))
 
     for d in docs:
         d["_id"] = str(d["_id"])
@@ -727,9 +735,9 @@ def admin_overview():
         print(f"Admin overview - alerts_today: {len(alerts_today)}, open_alerts: {len(open_alerts)}, maintenance: {len(maintenance)}, packages: {len(unpicked_packages)}")
         
         recent_alerts_query = db.alerts.find()
-        recent_alerts_query = recent_alerts_query.sort("timestamp", -1)
+        recent_alerts_query = recent_alerts_query.sort([("timestamp", -1)])
         recent_alerts = list(recent_alerts_query.limit(5))
-        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5))
+        recent_maintenance = list(db.maintenance_requests.find().sort([("created_at", -1)]).limit(5))
         
         print(f"Admin overview - recent_alerts: {len(recent_alerts)}, recent_maintenance: {len(recent_maintenance)}")
         
@@ -742,6 +750,8 @@ def admin_overview():
                 alert["created_at"] = alert["timestamp"].isoformat()
             elif "created_at" in alert and isinstance(alert["created_at"], datetime):
                 alert["created_at"] = alert["created_at"].isoformat()
+            if "room" in alert and "room_id" not in alert:
+                alert["room_id"] = alert["room"]
         
         for req in recent_maintenance:
             req["_id"] = str(req["_id"])
@@ -772,7 +782,7 @@ def admin_overview():
         return jsonify({"error": f"Failed to load overview: {str(e)}"}), 500
 
 
-@app.route("/api/admin/alerts", methods=["GET"])
+@app.route("/api/admin/alerts", methods=["GET", "DELETE"])
 def admin_alerts():
     if "username" not in session or session.get("role") != "admin":
         return jsonify({"error": "Unauthorized"}), 401
@@ -781,6 +791,16 @@ def admin_alerts():
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
+        if request.method == "DELETE":
+            try:
+                result = db.alerts.delete_many({})
+                return jsonify({"message": f"Deleted {result.deleted_count} alerts successfully", "deleted_count": result.deleted_count})
+            except Exception as delete_error:
+                print(f"Error deleting alerts: {delete_error}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": f"Failed to delete alerts: {str(delete_error)}"}), 500
+        
         severity = request.args.get("severity", "").strip()
         status = request.args.get("status", "").strip()
         
@@ -791,7 +811,7 @@ def admin_alerts():
             query["status"] = status
         
         alerts_query = db.alerts.find(query)
-        alerts_query = alerts_query.sort("timestamp", -1)
+        alerts_query = alerts_query.sort([("timestamp", -1)])
         alerts = list(alerts_query)
         for alert in alerts:
             alert["_id"] = str(alert["_id"])
@@ -802,14 +822,19 @@ def admin_alerts():
                 alert["created_at"] = alert["timestamp"].isoformat()
             elif "created_at" in alert and isinstance(alert["created_at"], datetime):
                 alert["created_at"] = alert["created_at"].isoformat()
+            if "room" in alert and "room_id" not in alert:
+                alert["room_id"] = alert["room"]
         
         return jsonify({"data": convert_objectid_to_str(alerts)})
     except Exception as e:
-        print(f"Error loading alerts: {e}")
-        return jsonify({"error": "Failed to load alerts"}), 500
+        print(f"Error in alerts API: {e}")
+        import traceback
+        traceback.print_exc()
+        error_msg = str(e) if str(e) else "Failed to process request"
+        return jsonify({"error": error_msg}), 500
 
 
-@app.route("/api/admin/alerts/<alert_id>", methods=["PATCH"])
+@app.route("/api/admin/alerts/<alert_id>", methods=["PATCH", "DELETE"])
 def update_alert_status(alert_id):
     if "username" not in session or session.get("role") != "admin":
         return jsonify({"error": "Unauthorized"}), 401
@@ -818,453 +843,28 @@ def update_alert_status(alert_id):
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
-        data = request.get_json()
-        new_status = data.get("status", "").strip()
+        if request.method == "DELETE":
+            result = db.alerts.delete_one({"_id": ObjectId(alert_id)})
+            if result.deleted_count == 0:
+                return jsonify({"error": "Alert not found"}), 404
+            return jsonify({"message": "Alert deleted successfully"})
         
-        if new_status not in ["open", "resolved", "ignored"]:
-            return jsonify({"error": "Invalid status"}), 400
-        
-        result = db.alerts.update_one(
-            {"_id": ObjectId(alert_id)},
-            {"$set": {"status": new_status}}
-        )
-        
-        if not result or result.matched_count == 0:
-            return jsonify({"error": "Alert not found"}), 404
-        
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"Error updating alert: {e}")
-        return jsonify({"error": "Failed to update alert"}), 500
-
-
-@app.route("/api/admin/maintenance", methods=["GET"])
-def admin_maintenance():
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        status = request.args.get("status", "").strip()
-        
-        query = {}
-        if status:
-            query["status"] = status
-        
-        requests = list(db.maintenance_requests.find(query).sort("created_at", -1))
-        
-        for req in requests:
-            req["_id"] = str(req["_id"])
-            req["request_id"] = str(req["_id"])
-            if "apartment_number" in req:
-                req["apartment_id"] = req["apartment_number"]
-            if "created_at" in req and isinstance(req["created_at"], datetime):
-                req["created_at"] = req["created_at"].isoformat()
-        
-        return jsonify({"data": requests})
-    except Exception as e:
-        print(f"Error loading maintenance: {e}")
-        return jsonify({"error": "Failed to load maintenance"}), 500
-
-
-@app.route("/api/admin/maintenance/<request_id>", methods=["PATCH"])
-def update_maintenance_status(request_id):
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        data = request.get_json()
-        new_status = data.get("status", "").strip()
-        
-        if new_status not in ["pending", "in_progress", "resolved"]:
-            return jsonify({"error": "Invalid status"}), 400
-        
-        result = db.maintenance_requests.update_one(
-            {"_id": ObjectId(request_id)},
-            {"$set": {"status": new_status}}
-        )
-        
-        if result.matched_count == 0:
-            return jsonify({"error": "Maintenance request not found"}), 404
-        
-        return jsonify({"success": True})
-    except Exception as e:
-        print(f"Error updating maintenance: {e}")
-        return jsonify({"error": "Failed to update maintenance"}), 500
-
-
-@app.route("/api/admin/rooms", methods=["GET"])
-def admin_rooms():
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        rooms_list = []
-        
-        rooms_from_db = list(db.rooms.find())
-        print(f"Admin rooms - found {len(rooms_from_db)} rooms in db.rooms collection")
-        if rooms_from_db:
-            for room in rooms_from_db:
-                room_id_str = str(room["_id"])
-                room_data = {
-                    "_id": room_id_str,
-                    "room_id": room_id_str,
-                    "apartment_id": room.get("apartment_id", room.get("apartment", "")),
-                    "room_name": room.get("room_name", room.get("room", ""))
-                }
-                
-                latest_reading = db.sensor_readings.find_one(
-                    {"room_id": room.get("room_id") or room.get("_id")},
-                    sort=[("timestamp", -1)]
-                )
-                
-                if latest_reading:
-                    room_data["latest_readings"] = {
-                        "temperature": {
-                            "timestamp": latest_reading.get("timestamp").isoformat() if isinstance(latest_reading.get("timestamp"), datetime) else str(latest_reading.get("timestamp", "")),
-                            "value": latest_reading.get("temperature", latest_reading.get("value", 0))
-                        }
-                    }
-                
-                rooms_list.append(convert_objectid_to_str(room_data))
-        else:
-            sensor_readings_count = db.sensor_readings.count_documents({})
-            print(f"Admin rooms - found {sensor_readings_count} sensor_readings in database")
-            
-            try:
-                unique_rooms = list(db.sensor_readings.aggregate([
-                    {"$group": {
-                        "_id": {
-                            "apartment_id": "$apartment_id",
-                            "room": "$room"
-                        }
-                    }},
-                    {"$sort": {"_id.apartment_id": 1, "_id.room": 1}}
-                ]))
-                print(f"Admin rooms - aggregated {len(unique_rooms)} unique rooms from sensor_readings")
-            except Exception as agg_error:
-                print(f"Admin rooms - aggregation error: {agg_error}")
-                unique_rooms = []
-            
-            for room_group in unique_rooms:
-                apartment_id = room_group["_id"].get("apartment_id", "")
-                room_name = room_group["_id"].get("room", "")
-                
-                if not apartment_id or not room_name:
-                    continue
-                
-                room_id = f"{apartment_id}_{room_name}".replace(" ", "_")
-                
-                latest_temp = db.sensor_readings.find_one(
-                    {"apartment_id": apartment_id, "room": room_name, "sensor_type": "temperature"},
-                    sort=[("timestamp", -1)]
-                )
-                
-                room_data = {
-                    "room_id": room_id,
-                    "apartment_id": apartment_id,
-                    "room_name": room_name
-                }
-                
-                if latest_temp:
-                    temp_value = latest_temp.get("value", 0)
-                    timestamp = latest_temp.get("timestamp")
-                    if isinstance(timestamp, datetime):
-                        timestamp_str = timestamp.isoformat()
-                    else:
-                        timestamp_str = str(timestamp) if timestamp else ""
-                    
-                    room_data["latest_readings"] = {
-                        "temperature": {
-                            "timestamp": timestamp_str,
-                            "value": temp_value
-                        }
-                    }
-                
-                rooms_list.append(convert_objectid_to_str(room_data))
-        
-        print(f"Admin rooms - found {len(rooms_list)} rooms")
-        return jsonify({"data": rooms_list})
-    except Exception as e:
-        print(f"Error loading rooms: {e}")
-        return jsonify({"error": "Failed to load rooms"}), 500
-
-
-@app.route("/api/admin/rooms/<room_id>/history", methods=["GET"])
-def admin_room_history(room_id):
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        room_parts = room_id.rsplit("_", 1)
-        if len(room_parts) == 2:
-            apartment_id, room_name = room_parts
-            room_name = room_name.replace("_", " ")
-        else:
-            return jsonify({"error": "Invalid room_id format"}), 400
-        
-        all_readings = list(db.sensor_readings.find(
-            {"apartment_id": apartment_id, "room": room_name}
-        ).sort("timestamp", -1).limit(100))
-        
-        readings_by_timestamp = {}
-        for reading in all_readings:
-            timestamp = reading.get("timestamp")
-            if isinstance(timestamp, datetime):
-                timestamp_key = timestamp.isoformat()
-            else:
-                timestamp_key = str(timestamp) if timestamp else ""
-            
-            if timestamp_key not in readings_by_timestamp:
-                readings_by_timestamp[timestamp_key] = {
-                    "timestamp": timestamp_key,
-                    "temperature": None,
-                    "smoke": None,
-                    "noise": None,
-                    "motion": None
-                }
-            
-            sensor_type = reading.get("sensor_type", "")
-            value = reading.get("value", 0)
-            
-            if sensor_type == "temperature":
-                readings_by_timestamp[timestamp_key]["temperature"] = value
-            elif sensor_type == "smoke":
-                readings_by_timestamp[timestamp_key]["smoke"] = value
-            elif sensor_type == "noise":
-                readings_by_timestamp[timestamp_key]["noise"] = value
-            elif sensor_type == "motion":
-                readings_by_timestamp[timestamp_key]["motion"] = bool(value)
-        
-        history = list(readings_by_timestamp.values())
-        history.sort(key=lambda x: x["timestamp"], reverse=True)
-        
-        return jsonify({"data": {"readings": convert_objectid_to_str(history)}})
-    except Exception as e:
-        print(f"Error loading room history: {e}")
-        return jsonify({"error": "Failed to load room history"}), 500
-
-
-@app.route("/api/admin/community/posts", methods=["GET"])
-def admin_community_posts():
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        status = request.args.get("status", "").strip()
-        category = request.args.get("category", "").strip()
-        
-        query = {}
-        if status:
-            if status == "active":
-                query["status"] = {"$in": ["available", "active"]}
-            elif status == "closed":
-                query["status"] = "closed"
-            else:
-                query["status"] = status
-        if category:
-            query["category"] = category
-        
-        posts = list(db.community_posts.find(query).sort("created_at", -1))
-        
-        for post in posts:
-            post["_id"] = str(post["_id"])
-            post["post_id"] = str(post["_id"])
-            if "author" in post:
-                post["resident_name"] = post.get("author", "")
-            if "status" not in post or post["status"] == "available":
-                post["status"] = "active"
-            if "created_at" in post and isinstance(post["created_at"], datetime):
-                post["created_at"] = post["created_at"].isoformat()
-        
-        return jsonify({"data": posts})
-    except Exception as e:
-        print(f"Error loading community posts: {e}")
-        return jsonify({"error": "Failed to load community posts"}), 500
-
-
-@app.route("/api/admin/community/posts/<post_id>", methods=["PATCH", "DELETE"])
-def admin_community_post(post_id):
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        if request.method == "PATCH":
+        elif request.method == "PATCH":
             data = request.get_json()
             new_status = data.get("status", "").strip()
             
-            if new_status not in ["active", "closed"]:
+            if new_status not in ["open", "resolved", "ignored"]:
                 return jsonify({"error": "Invalid status"}), 400
             
-            result = db.community_posts.update_one(
-                {"_id": ObjectId(post_id)},
+            result = db.alerts.update_one(
+                {"_id": ObjectId(alert_id)},
                 {"$set": {"status": new_status}}
             )
             
-            if result.matched_count == 0:
-                return jsonify({"error": "Post not found"}), 404
+            if not result or result.matched_count == 0:
+                return jsonify({"error": "Alert not found"}), 404
             
             return jsonify({"success": True})
-        
-        elif request.method == "DELETE":
-            post = db.community_posts.find_one({"_id": ObjectId(post_id)})
-            if not post:
-                return jsonify({"error": "Post not found"}), 404
-            
-            if post.get("image_url"):
-                image_path = post["image_url"].replace("/static/", "static/")
-                if os.path.exists(image_path):
-                    os.remove(image_path)
-            
-            db.community_posts.delete_one({"_id": ObjectId(post_id)})
-            db.comments.delete_many({"post_id": post_id})
-            
-            return jsonify({"success": True})
-    except Exception as e:
-        print(f"Error managing community post: {e}")
-        return jsonify({"error": "Failed to manage post"}), 500
-
-
-@app.route("/api/admin/overview")
-def admin_overview():
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        alerts_today = list(db.alerts.find({"status": "new"}))
-        open_alerts = list(db.alerts.find({"status": {"$in": ["new", "open"]}}))
-        maintenance = list(db.maintenance_requests.find({"status": {"$ne": "resolved"}}))
-        unpicked_packages = list(db.packages.find({"status": {"$ne": "picked_up"}}))
-        
-        print(f"Admin overview - alerts_today: {len(alerts_today)}, open_alerts: {len(open_alerts)}, maintenance: {len(maintenance)}, packages: {len(unpicked_packages)}")
-        
-        recent_alerts_query = db.alerts.find()
-        recent_alerts_query = recent_alerts_query.sort("timestamp", -1)
-        recent_alerts = list(recent_alerts_query.limit(5))
-        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5))
-        
-        print(f"Admin overview - recent_alerts: {len(recent_alerts)}, recent_maintenance: {len(recent_maintenance)}")
-        
-        for alert in recent_alerts:
-            alert["_id"] = str(alert["_id"])
-            alert["alert_id"] = str(alert["_id"])
-            if "reading_id" in alert:
-                alert["reading_id"] = str(alert["reading_id"])
-            if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
-                alert["created_at"] = alert["timestamp"].isoformat()
-            elif "created_at" in alert and isinstance(alert["created_at"], datetime):
-                alert["created_at"] = alert["created_at"].isoformat()
-        
-        for req in recent_maintenance:
-            req["_id"] = str(req["_id"])
-            req["request_id"] = str(req["_id"])
-            if "apartment_number" in req:
-                req["apartment_id"] = req["apartment_number"]
-            if "created_at" in req and isinstance(req["created_at"], datetime):
-                req["created_at"] = req["created_at"].isoformat()
-        
-        response_data = {
-            "data": {
-                "counts": {
-                    "alerts_total_today": len(alerts_today),
-                    "alerts_unresolved": len(open_alerts),
-                    "maintenance_open": len(maintenance),
-                    "packages_unpicked": len(unpicked_packages)
-                },
-                "recent_alerts": convert_objectid_to_str(recent_alerts),
-                "recent_maintenance": convert_objectid_to_str(recent_maintenance)
-            }
-        }
-        
-        return jsonify(response_data)
-    except Exception as e:
-        import traceback
-        print(f"Error loading overview: {e}")
-        print(traceback.format_exc())
-        return jsonify({"error": f"Failed to load overview: {str(e)}"}), 500
-
-
-@app.route("/api/admin/alerts", methods=["GET"])
-def admin_alerts():
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        severity = request.args.get("severity", "").strip()
-        status = request.args.get("status", "").strip()
-        
-        query = {}
-        if severity:
-            query["severity"] = severity
-        if status:
-            query["status"] = status
-        
-        alerts_query = db.alerts.find(query)
-        alerts_query = alerts_query.sort("timestamp", -1)
-        alerts = list(alerts_query)
-        for alert in alerts:
-            alert["_id"] = str(alert["_id"])
-            alert["alert_id"] = str(alert["_id"])
-            if "reading_id" in alert:
-                alert["reading_id"] = str(alert["reading_id"])
-            if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
-                alert["created_at"] = alert["timestamp"].isoformat()
-            elif "created_at" in alert and isinstance(alert["created_at"], datetime):
-                alert["created_at"] = alert["created_at"].isoformat()
-        
-        return jsonify({"data": convert_objectid_to_str(alerts)})
-    except Exception as e:
-        print(f"Error loading alerts: {e}")
-        return jsonify({"error": "Failed to load alerts"}), 500
-
-
-@app.route("/api/admin/alerts/<alert_id>", methods=["PATCH"])
-def update_alert_status(alert_id):
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        data = request.get_json()
-        new_status = data.get("status", "").strip()
-        
-        if new_status not in ["open", "resolved", "ignored"]:
-            return jsonify({"error": "Invalid status"}), 400
-        
-        result = db.alerts.update_one(
-            {"_id": ObjectId(alert_id)},
-            {"$set": {"status": new_status}}
-        )
-        
-        if not result or result.matched_count == 0:
-            return jsonify({"error": "Alert not found"}), 404
-        
-        return jsonify({"success": True})
     except Exception as e:
         print(f"Error updating alert: {e}")
         return jsonify({"error": "Failed to update alert"}), 500
@@ -1285,7 +885,7 @@ def admin_maintenance():
         if status:
             query["status"] = status
         
-        requests = list(db.maintenance_requests.find(query).sort("created_at", -1))
+        requests = list(db.maintenance_requests.find(query).sort([("created_at", -1)]))
         
         for req in requests:
             req["_id"] = str(req["_id"])
@@ -1448,7 +1048,7 @@ def admin_room_history(room_id):
         
         all_readings = list(db.sensor_readings.find(
             {"apartment_id": apartment_id, "room": room_name}
-        ).sort("timestamp", -1).limit(100))
+        ).sort([("timestamp", -1)]).limit(100))
         
         readings_by_timestamp = {}
         for reading in all_readings:
@@ -1511,7 +1111,7 @@ def admin_community_posts():
         if category:
             query["category"] = category
         
-        posts = list(db.community_posts.find(query).sort("created_at", -1))
+        posts = list(db.community_posts.find(query).sort([("created_at", -1)]))
         
         for post in posts:
             post["_id"] = str(post["_id"])
@@ -1575,4 +1175,5 @@ def admin_community_post(post_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    port = int(os.getenv("PORT", 5001))
+    app.run(host="0.0.0.0", port=port, debug=False)
