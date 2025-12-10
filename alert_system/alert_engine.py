@@ -63,13 +63,11 @@ def run_engine():
                 if alert_data:
                     existing_alert = db.alerts.find_one(
                         {
-                            "apartment_id": reading.get("apartment_id"),
-                            "room": reading.get("room"),
+                            "reading_id": reading.get("_id"),
                             "type": alert_data["type"],
-                            "status": {"$in": ["new", "open"]},
-                            "timestamp": {"$gte": cutoff_time - timedelta(minutes=60)},
                         }
                     )
+                    
                     if not existing_alert:
                         new_alert = {
                             "timestamp": datetime.now(timezone.utc),
