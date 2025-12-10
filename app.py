@@ -135,7 +135,7 @@ def dashboard():
             all_pending = list(
                 db.maintenance_requests.find(
                     {"$or": query_conditions, "status": {"$ne": "resolved"}}
-                ).sort("created_at", -1)
+                ).sort([("created_at", -1)])
             )
 
             maintenance_requests = all_pending[:1] if all_pending else []
@@ -188,7 +188,7 @@ def packages():
                 query_conditions.append({"resident_name": {"$regex": full_name.replace(" ", ".*"), "$options": "i"}})
             
             query = {"$or": query_conditions}
-            pkgs_raw = list(db.packages.find(query).sort("arrived_at", -1))
+            pkgs_raw = list(db.packages.find(query).sort([("arrived_at", -1)]))
             for pkg in pkgs_raw:
                 pkg["_id"] = str(pkg["_id"])
                 status = pkg.get("status", "arrived")
@@ -247,7 +247,7 @@ def community():
             {"description": {"$regex": search_query, "$options": "i"}}
         ]
     
-    posts = list(db.community_posts.find(query).sort("created_at", -1))
+    posts = list(db.community_posts.find(query).sort([("created_at", -1)]))
     now = datetime.now()
     username = session.get("username", "")
     for post in posts:
@@ -341,7 +341,7 @@ def post_detail(post_id):
         else:
             post["time_ago"] = "Just now"
         
-        comments = list(db.comments.find({"post_id": post_id}).sort("created_at", 1))
+        comments = list(db.comments.find({"post_id": post_id}).sort([("created_at", 1)]))
         for comment in comments:
             comment["_id"] = str(comment["_id"])
             if "created_at" in comment and comment["created_at"]:
@@ -494,7 +494,7 @@ def admin_packages():
         packages = []
         if db is not None:
             try:
-                packages = list(db.packages.find(query).sort("arrived_at", -1))
+                packages = list(db.packages.find(query).sort([("arrived_at", -1)]))
                 for pkg in packages:
                     pkg["_id"] = str(pkg["_id"])
                     pkg["package_id"] = str(pkg["_id"])
@@ -620,7 +620,7 @@ def signup():
         last_name = request.form.get("last_name", "").strip()
         apartment_number = request.form.get("apartment_number", "").strip().upper()
         if apartment_number and not apartment_number.startswith("A-"):
-            apartment_number = f"A-{apartment_number.replace('A-', '')}"
+            apartment_number = "A-" + apartment_number
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "")
@@ -708,7 +708,7 @@ def api_latest_sensor_readings():
         return jsonify({"error": "Database unavailable"}), 500
 
     limit = int(request.args.get("limit", 50))
-    docs = list(db.sensor_readings.find({}).sort("timestamp", -1).limit(limit))
+    docs = list(db.sensor_readings.find({}).sort([("timestamp", -1)]).limit(limit))
 
     for d in docs:
         d["_id"] = str(d["_id"])
@@ -735,9 +735,9 @@ def admin_overview():
         print(f"Admin overview - alerts_today: {len(alerts_today)}, open_alerts: {len(open_alerts)}, maintenance: {len(maintenance)}, packages: {len(unpicked_packages)}")
         
         recent_alerts_query = db.alerts.find()
-        recent_alerts_query = recent_alerts_query.sort("timestamp", -1)
+        recent_alerts_query = recent_alerts_query.sort([("timestamp", -1)])
         recent_alerts = list(recent_alerts_query.limit(5))
-        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5))
+        recent_maintenance = list(db.maintenance_requests.find().sort([("created_at", -1)]).limit(5))
         
         print(f"Admin overview - recent_alerts: {len(recent_alerts)}, recent_maintenance: {len(recent_maintenance)}")
         
@@ -801,32 +801,31 @@ def admin_alerts():
                 traceback.print_exc()
                 return jsonify({"error": f"Failed to delete alerts: {str(delete_error)}"}), 500
         
-        elif request.method == "GET":
-            severity = request.args.get("severity", "").strip()
-            status = request.args.get("status", "").strip()
-            
-            query = {}
-            if severity:
-                query["severity"] = severity
-            if status:
-                query["status"] = status
-            
-            alerts_query = db.alerts.find(query)
-            alerts_query = alerts_query.sort("timestamp", -1)
-            alerts = list(alerts_query)
-            for alert in alerts:
-                alert["_id"] = str(alert["_id"])
-                alert["alert_id"] = str(alert["_id"])
-                if "reading_id" in alert:
-                    alert["reading_id"] = str(alert["reading_id"])
-                if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
-                    alert["created_at"] = alert["timestamp"].isoformat()
-                elif "created_at" in alert and isinstance(alert["created_at"], datetime):
-                    alert["created_at"] = alert["created_at"].isoformat()
-                if "room" in alert and "room_id" not in alert:
-                    alert["room_id"] = alert["room"]
-            
-            return jsonify({"data": convert_objectid_to_str(alerts)})
+        severity = request.args.get("severity", "").strip()
+        status = request.args.get("status", "").strip()
+        
+        query = {}
+        if severity:
+            query["severity"] = severity
+        if status:
+            query["status"] = status
+        
+        alerts_query = db.alerts.find(query)
+        alerts_query = alerts_query.sort([("timestamp", -1)])
+        alerts = list(alerts_query)
+        for alert in alerts:
+            alert["_id"] = str(alert["_id"])
+            alert["alert_id"] = str(alert["_id"])
+            if "reading_id" in alert:
+                alert["reading_id"] = str(alert["reading_id"])
+            if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
+                alert["created_at"] = alert["timestamp"].isoformat()
+            elif "created_at" in alert and isinstance(alert["created_at"], datetime):
+                alert["created_at"] = alert["created_at"].isoformat()
+            if "room" in alert and "room_id" not in alert:
+                alert["room_id"] = alert["room"]
+        
+        return jsonify({"data": convert_objectid_to_str(alerts)})
     except Exception as e:
         print(f"Error in alerts API: {e}")
         import traceback
@@ -886,7 +885,7 @@ def admin_maintenance():
         if status:
             query["status"] = status
         
-        requests = list(db.maintenance_requests.find(query).sort("created_at", -1))
+        requests = list(db.maintenance_requests.find(query).sort([("created_at", -1)]))
         
         for req in requests:
             req["_id"] = str(req["_id"])
@@ -940,7 +939,6 @@ def admin_rooms():
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
-        response = None
         rooms_list = []
         
         rooms_from_db = list(db.rooms.find())
@@ -975,9 +973,6 @@ def admin_rooms():
             
             try:
                 unique_rooms = list(db.sensor_readings.aggregate([
-                    {"$match": {
-                        "apartment_id": {"$regex": "^A-[0-9]+$"}
-                    }},
                     {"$group": {
                         "_id": {
                             "apartment_id": "$apartment_id",
@@ -986,10 +981,7 @@ def admin_rooms():
                     }},
                     {"$sort": {"_id.apartment_id": 1, "_id.room": 1}}
                 ]))
-                print(f"Admin rooms - aggregated {len(unique_rooms)} unique rooms from sensor_readings (new format only)")
-                if unique_rooms:
-                    sample_ids = [f"{r['_id'].get('apartment_id')}_{r['_id'].get('room')}" for r in unique_rooms[:5]]
-                    print(f"Admin rooms - Sample room IDs: {sample_ids}")
+                print(f"Admin rooms - aggregated {len(unique_rooms)} unique rooms from sensor_readings")
             except Exception as agg_error:
                 print(f"Admin rooms - aggregation error: {agg_error}")
                 unique_rooms = []
@@ -1003,25 +995,10 @@ def admin_rooms():
                 
                 room_id = f"{apartment_id}_{room_name}".replace(" ", "_")
                 
-                all_sensor_readings = list(db.sensor_readings.find(
-                    {"apartment_id": apartment_id, "room": room_name}
-                ).sort([("timestamp", -1), ("_id", -1)]).limit(50))
-                
-                if not all_sensor_readings or len(all_sensor_readings) == 0:
-                    continue
-                
-                latest_timestamp_in_query = all_sensor_readings[0].get("timestamp")
-                if latest_timestamp_in_query:
-                    from datetime import timedelta
-                    if isinstance(latest_timestamp_in_query, datetime):
-                        now_utc = datetime.now(timezone.utc)
-                        ts_utc = latest_timestamp_in_query
-                        if ts_utc.tzinfo is None:
-                            ts_utc = ts_utc.replace(tzinfo=timezone.utc)
-                        time_diff = now_utc - ts_utc
-                        if time_diff > timedelta(minutes=5):
-                            print(f"Skipping {room_id}: data too old ({time_diff}), latest: {latest_timestamp_in_query}")
-                            continue
+                latest_temp = db.sensor_readings.find_one(
+                    {"apartment_id": apartment_id, "room": room_name, "sensor_type": "temperature"},
+                    sort=[("timestamp", -1)]
+                )
                 
                 room_data = {
                     "room_id": room_id,
@@ -1029,69 +1006,24 @@ def admin_rooms():
                     "room_name": room_name
                 }
                 
-                latest_readings = {}
-                latest_timestamp = None
-                
-                if all_sensor_readings and room_id == "1A_room-1":
-                    print(f"Debug {room_id}: Query filter: apartment_id='{apartment_id}', room='{room_name}'")
-                    print(f"Debug {room_id}: Found {len(all_sensor_readings)} readings, first timestamp: {all_sensor_readings[0].get('timestamp')}")
-                    if len(all_sensor_readings) > 0:
-                        sample = all_sensor_readings[0]
-                        print(f"Debug {room_id}: Sample reading - apartment_id='{sample.get('apartment_id')}', room='{sample.get('room')}', timestamp={sample.get('timestamp')}")
-                    
-                    latest_in_db = db.sensor_readings.find_one({}, sort=[("timestamp", -1), ("_id", -1)])
-                    if latest_in_db:
-                        print(f"Debug {room_id}: Latest in entire DB - apartment_id='{latest_in_db.get('apartment_id')}', room='{latest_in_db.get('room')}', timestamp={latest_in_db.get('timestamp')}")
-                
-                readings_by_type = {}
-                for reading in all_sensor_readings:
-                    sensor_type = reading.get("sensor_type")
-                    if sensor_type and sensor_type not in readings_by_type:
-                        readings_by_type[sensor_type] = reading
-                
-                for sensor_type in ["temperature", "smoke", "noise", "motion"]:
-                    if sensor_type in readings_by_type:
-                        latest_reading = readings_by_type[sensor_type]
-                        timestamp = latest_reading.get("timestamp")
-                        value = latest_reading.get("value", 0)
-                        if timestamp:
-                            if latest_timestamp is None or timestamp > latest_timestamp:
-                                latest_timestamp = timestamp
-                            if isinstance(timestamp, datetime):
-                                timestamp_str = timestamp.isoformat()
-                            else:
-                                timestamp_str = str(timestamp)
-                            latest_readings[sensor_type] = {
-                                "timestamp": timestamp_str,
-                                "value": value
-                            }
-                
-                if latest_readings:
-                    if latest_timestamp and isinstance(latest_timestamp, datetime):
-                        latest_timestamp_str = latest_timestamp.isoformat()
+                if latest_temp:
+                    temp_value = latest_temp.get("value", 0)
+                    timestamp = latest_temp.get("timestamp")
+                    if isinstance(timestamp, datetime):
+                        timestamp_str = timestamp.isoformat()
                     else:
-                        latest_timestamp_str = str(latest_timestamp) if latest_timestamp else ""
+                        timestamp_str = str(timestamp) if timestamp else ""
                     
-                    for sensor_type in latest_readings:
-                        latest_readings[sensor_type]["timestamp"] = latest_timestamp_str
-                    
-                    room_data["latest_readings"] = latest_readings
+                    room_data["latest_readings"] = {
+                        "temperature": {
+                            "timestamp": timestamp_str,
+                            "value": temp_value
+                        }
+                    }
                 
                 rooms_list.append(convert_objectid_to_str(room_data))
         
         print(f"Admin rooms - found {len(rooms_list)} rooms")
-        if rooms_list:
-            first_room = rooms_list[0]
-            if "latest_readings" in first_room and first_room["latest_readings"]:
-                temp_info = first_room["latest_readings"].get("temperature", {})
-                from datetime import datetime as dt_now
-                now_str = dt_now.utcnow().isoformat()
-                print(f"Admin rooms - Current time: {now_str}, Sample room {first_room.get('room_id')} latest temp: {temp_info.get('value')} at {temp_info.get('timestamp')}")
-                
-                total_count = db.sensor_readings.count_documents({})
-                latest_overall = db.sensor_readings.find_one({}, sort=[("timestamp", -1), ("_id", -1)])
-                if latest_overall:
-                    print(f"Admin rooms - DB total: {total_count}, Latest overall timestamp: {latest_overall.get('timestamp')}")
         return jsonify({"data": rooms_list})
     except Exception as e:
         print(f"Error loading rooms: {e}")
@@ -1116,7 +1048,7 @@ def admin_room_history(room_id):
         
         all_readings = list(db.sensor_readings.find(
             {"apartment_id": apartment_id, "room": room_name}
-        ).sort([("timestamp", -1), ("_id", -1)]).limit(100))
+        ).sort([("timestamp", -1)]).limit(100))
         
         readings_by_timestamp = {}
         for reading in all_readings:
@@ -1179,7 +1111,7 @@ def admin_community_posts():
         if category:
             query["category"] = category
         
-        posts = list(db.community_posts.find(query).sort("created_at", -1))
+        posts = list(db.community_posts.find(query).sort([("created_at", -1)]))
         
         for post in posts:
             post["_id"] = str(post["_id"])
@@ -1243,4 +1175,5 @@ def admin_community_post(post_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    port = int(os.getenv("PORT", 5001))
+    app.run(host="0.0.0.0", port=port, debug=False)
