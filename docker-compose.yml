@@ -1,7 +1,29 @@
 services:
+  webapp:
+    build: .
+    container_name: smart_apartment_webapp
+    ports:
+      - "5001:5001"
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DB=${MONGODB_DB:-smart_apartment_db}
+    restart: always
+
+  sensor_simulator:
+    build: ./sensor_simulator
+    container_name: smart_apartment_simulator
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+      - MONGODB_DB=${MONGODB_DB:-smart_apartment_db}
+      - SIM_INTERVAL_SECONDS=${SIM_INTERVAL_SECONDS:-5.0}
+      - SIM_APARTMENTS=${SIM_APARTMENTS:-8}
+      - SIM_ROOMS_PER_APARTMENT=${SIM_ROOMS_PER_APARTMENT:-3}
+    restart: always
+
   alert_engine:
     build: ./alert_system
     container_name: smart_apartment_alert_engine
     environment:
-      - MONGO_URI=mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0
+      - MONGO_URI=${MONGO_URI}
+      - DB_NAME=${DB_NAME:-smart_apartment_db}
     restart: always
