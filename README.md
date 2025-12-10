@@ -15,6 +15,8 @@ Smart apartment management platform with real-time sensor monitoring, automated 
 
 - [Siqi Zhu](https://github.com/HelenZhutt)
 - [Krystal Lin](https://github.com/krystalll-0)
+- [Ganling Zhou](https://github.com/GanlingZ)
+- [Christine Jin](https://github.com/Christine-Jin)
 - [Hanqi Gui](https://github.com/hanqigui)
 
 ## Getting Started
