@@ -1,9 +1,12 @@
-// admin.js
+const USE_MOCK = {
+  overview: false,
+  alerts: true,
+  rooms: true,
+  maintenance: false,
+  packages: false,
+  community: false
+};
 
-// ====== 开关：true = 前端假数据模式；false = 调后端 API ======
-const USE_MOCK = true;
-
-// ====== 一些假数据，先让页面“活起来”，以后可以删掉 ======
 const mock = {
   alerts: [
     {
@@ -145,8 +148,6 @@ const mock = {
   ],
 };
 
-// ====== 页面初始化 ======
-
 document.addEventListener("DOMContentLoaded", () => {
   setupNavigation();
   setupPackagesModal();
@@ -154,8 +155,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLogout();
   loadOverview();
 });
-
-// ====== 通用：section 切换 & 导航 ======
 
 function setSection(title, subtitle, sectionId) {
   document.getElementById("section-title").textContent = title;
@@ -232,15 +231,33 @@ function setupNavigation() {
 function setupRefreshButtons() {
   const btnAlerts = document.getElementById("btn-alerts-refresh");
   if (btnAlerts) btnAlerts.addEventListener("click", loadAlerts);
+  
+  const filterAlertsSeverity = document.getElementById("filter-alerts-severity");
+  if (filterAlertsSeverity) filterAlertsSeverity.addEventListener("change", loadAlerts);
+  
+  const filterAlertsStatus = document.getElementById("filter-alerts-status");
+  if (filterAlertsStatus) filterAlertsStatus.addEventListener("change", loadAlerts);
 
   const btnMaint = document.getElementById("btn-maintenance-refresh");
   if (btnMaint) btnMaint.addEventListener("click", loadMaintenance);
+  
+  const filterMaint = document.getElementById("filter-maintenance-status");
+  if (filterMaint) filterMaint.addEventListener("change", loadMaintenance);
 
   const btnPkg = document.getElementById("btn-packages-refresh");
   if (btnPkg) btnPkg.addEventListener("click", loadPackages);
+  
+  const filterPkgStatus = document.getElementById("filter-packages-status");
+  if (filterPkgStatus) filterPkgStatus.addEventListener("change", loadPackages);
 
   const btnCommunity = document.getElementById("btn-community-refresh");
   if (btnCommunity) btnCommunity.addEventListener("click", loadCommunityPosts);
+  
+  const filterCommunityStatus = document.getElementById("filter-community-status");
+  if (filterCommunityStatus) filterCommunityStatus.addEventListener("change", loadCommunityPosts);
+  
+  const filterCommunityCategory = document.getElementById("filter-community-category");
+  if (filterCommunityCategory) filterCommunityCategory.addEventListener("change", loadCommunityPosts);
 }
 
 function setupLogout() {
@@ -257,13 +274,27 @@ function setupLogout() {
 async function loadOverview() {
   try {
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.overview) {
       data = buildOverviewFromMock();
     } else {
-      const res = await fetch("/api/admin/overview");
-      if (!res.ok) throw new Error("Failed to load overview");
+      const res = await fetch("/api/admin/overview", {
+        credentials: "same-origin"
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load overview");
+      }
       const payload = await res.json();
+      console.log("Overview API response:", payload);
       data = payload.data || payload;
+      console.log("Overview data:", data);
+      
+      if (USE_MOCK.alerts) {
+        const mockData = buildOverviewFromMock();
+        data.counts.alerts_total_today = mockData.counts.alerts_total_today;
+        data.counts.alerts_unresolved = mockData.counts.alerts_unresolved;
+        data.recent_alerts = mockData.recent_alerts;
+      }
     }
 
     document.getElementById("metric-alerts-total").textContent =
@@ -304,7 +335,8 @@ async function loadOverview() {
       maintBody.appendChild(tr);
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
@@ -330,19 +362,27 @@ function buildOverviewFromMock() {
   };
 }
 
-/* ---------- Sensors & Rooms ---------- */
 
 let roomsCache = [];
 
 async function loadRooms() {
   try {
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.rooms) {
       data = mock.rooms;
     } else {
-      const res = await fetch("/api/admin/rooms");
-      if (!res.ok) throw new Error("Failed to load rooms");
-      data = (await res.json()).data;
+      const res = await fetch("/api/admin/rooms", {
+        credentials: "same-origin"
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error("Rooms API error:", errorData);
+        throw new Error(errorData.error || "Failed to load rooms");
+      }
+      const payload = await res.json();
+      console.log("Rooms API response:", payload);
+      data = payload.data || payload;
+      console.log("Rooms data:", data);
     }
     roomsCache = data || [];
     renderRoomsList(roomsCache);
@@ -365,7 +405,8 @@ async function loadRooms() {
       });
     }
   } catch (err) {
-    console.error(err);
+    console.error("Error loading rooms:", err);
+    alert("Failed to load rooms: " + err.message);
   }
 }
 
@@ -417,11 +458,12 @@ async function loadRoomDetail(roomId) {
 
   try {
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.rooms) {
       data = { readings: mock.roomHistories[roomId] || [] };
     } else {
       const res = await fetch(
-        `/api/admin/rooms/${encodeURIComponent(roomId)}/history`
+        `/api/admin/rooms/${encodeURIComponent(roomId)}/history`,
+        { credentials: "same-origin" }
       );
       if (!res.ok) throw new Error("Failed to load room history");
       data = (await res.json()).data;
@@ -482,7 +524,6 @@ async function loadRoomDetail(roomId) {
   }
 }
 
-/* ---------- Alerts ---------- */
 
 async function loadAlerts() {
   try {
@@ -490,7 +531,7 @@ async function loadAlerts() {
     const status = document.getElementById("filter-alerts-status").value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.alerts) {
       data = mock.alerts.filter((a) => {
         if (severity && a.severity !== severity) return false;
         if (status && a.status !== status) return false;
@@ -500,7 +541,9 @@ async function loadAlerts() {
       const params = new URLSearchParams();
       if (severity) params.set("severity", severity);
       if (status) params.set("status", status);
-      const res = await fetch(`/api/admin/alerts?${params.toString()}`);
+      const res = await fetch(`/api/admin/alerts?${params.toString()}`, {
+        credentials: "same-origin"
+      });
       if (!res.ok) throw new Error("Failed to load alerts");
       data = (await res.json()).data;
     }
@@ -536,13 +579,14 @@ async function loadAlerts() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updateAlertStatus(alertId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.alerts) {
       const a = mock.alerts.find((x) => x.alert_id === alertId);
       if (a) a.status = status;
     } else {
@@ -551,6 +595,7 @@ async function updateAlertStatus(alertId, status) {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({ status }),
         }
       );
@@ -560,11 +605,11 @@ async function updateAlertStatus(alertId, status) {
     loadAlerts();
     loadOverview();
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
-/* ---------- Maintenance ---------- */
 
 async function loadMaintenance() {
   try {
@@ -573,7 +618,7 @@ async function loadMaintenance() {
     ).value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.maintenance) {
       data = mock.maintenance.filter((m) =>
         status ? m.status === status : true
       );
@@ -581,10 +626,14 @@ async function loadMaintenance() {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
       const res = await fetch(
-        `/api/admin/maintenance?${params.toString()}`
+        `/api/admin/maintenance?${params.toString()}`,
+        { credentials: "same-origin" }
       );
-      if (!res.ok) throw new Error("Failed to load maintenance");
-      data = (await res.json()).data;
+      if (!res.ok) {
+        throw new Error("Failed to load maintenance");
+      }
+      const responseData = await res.json();
+      data = responseData.data || [];
     }
 
     const tbody = document.getElementById("maintenance-table-body");
@@ -623,13 +672,14 @@ async function loadMaintenance() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updateMaintenanceStatus(requestId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.maintenance) {
       const r = mock.maintenance.find((x) => x.request_id === requestId);
       if (r) r.status = status;
     } else {
@@ -638,20 +688,29 @@ async function updateMaintenanceStatus(requestId, status) {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({ status }),
         }
       );
-      if (!res.ok) throw new Error("Failed to update maintenance status");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMsg = errorData.error || "Failed to update maintenance status";
+        alert(`Error: ${errorMsg}`);
+        return;
+      }
+      
       await res.json();
     }
+    
     loadMaintenance();
     loadOverview();
   } catch (err) {
     console.error(err);
+    alert(`Error: ${err.message || "Failed to update maintenance status"}`);
   }
 }
 
-/* ---------- Packages ---------- */
 
 function setupPackagesModal() {
   const modal = document.getElementById("package-modal");
@@ -691,7 +750,7 @@ function setupPackagesModal() {
       }
 
       try {
-        if (USE_MOCK) {
+        if (USE_MOCK.packages) {
           const newPkg = {
             package_id: "mock-" + Date.now(),
             resident_name: `Resident ${residentId}`,
@@ -706,13 +765,27 @@ function setupPackagesModal() {
           const res = await fetch("/api/admin/packages", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
             body: JSON.stringify({
               resident_id: residentId,
               carrier,
               location,
             }),
           });
-          if (!res.ok) throw new Error("Failed to create package");
+          
+          if (!res.ok) {
+            let errorMsg = "Failed to create package";
+            try {
+              const errorData = await res.json();
+              errorMsg = errorData.error || `Server error (${res.status})`;
+            } catch (jsonError) {
+              const textError = await res.text().catch(() => "");
+              errorMsg = `Server error (${res.status}): ${textError || "Unknown error"}`;
+            }
+            alert(`Error: ${errorMsg}`);
+            return;
+          }
+          
           await res.json();
         }
 
@@ -724,6 +797,7 @@ function setupPackagesModal() {
         loadOverview();
       } catch (err) {
         console.error(err);
+        alert(`Error: ${err.message || "Failed to create package"}`);
       }
     });
   }
@@ -735,7 +809,7 @@ async function loadPackages() {
       document.getElementById("filter-packages-status").value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.packages) {
       data = mock.packages.filter((p) =>
         status ? p.status === status : true
       );
@@ -743,7 +817,8 @@ async function loadPackages() {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
       const res = await fetch(
-        `/api/admin/packages?${params.toString()}`
+        `/api/admin/packages?${params.toString()}`,
+        { credentials: "same-origin" }
       );
       if (!res.ok) throw new Error("Failed to load packages");
       data = (await res.json()).data;
@@ -772,29 +847,49 @@ async function loadPackages() {
               ? `<button class="btn small primary" data-action="pickup" data-package-id="${pkg.package_id}">Picked up</button>`
               : ""
           }
+          <button class="btn small inline-link" data-action="delete" data-package-id="${pkg.package_id}">Delete</button>
         </td>
       `;
       tbody.appendChild(tr);
     });
 
     tbody.querySelectorAll("button[data-package-id]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
         const id = btn.dataset.packageId;
         const action = btn.dataset.action;
+        
+        if (action === "delete") {
+          if (confirm("Are you sure you want to delete this package?")) {
+            deletePackage(id);
+          }
+          return;
+        }
+        
         let newStatus;
-        if (action === "notify") newStatus = "notified";
-        if (action === "pickup") newStatus = "picked_up";
-        if (newStatus) updatePackageStatus(id, newStatus);
+        if (action === "notify") {
+          newStatus = "notified";
+        }
+        if (action === "pickup") {
+          newStatus = "picked_up";
+        }
+        
+        if (newStatus) {
+          updatePackageStatus(id, newStatus);
+        }
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updatePackageStatus(packageId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.packages) {
       const p = mock.packages.find((x) => x.package_id === packageId);
       if (p) p.status = status;
     } else {
@@ -803,20 +898,56 @@ async function updatePackageStatus(packageId, status) {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({ status }),
         }
       );
-      if (!res.ok) throw new Error("Failed to update package status");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMsg = errorData.error || "Failed to update package status";
+        alert(`Error: ${errorMsg}`);
+        return;
+      }
+      
       await res.json();
     }
     loadPackages();
     loadOverview();
   } catch (err) {
     console.error(err);
+    alert(`Error: ${err.message || "Failed to update package status"}`);
   }
 }
 
-/* ---------- Community ---------- */
+async function deletePackage(packageId) {
+  try {
+    if (USE_MOCK.packages) {
+      const idx = mock.packages.findIndex((x) => x.package_id === packageId);
+      if (idx >= 0) mock.packages.splice(idx, 1);
+    } else {
+      const res = await fetch(
+        `/api/admin/packages/${encodeURIComponent(packageId)}`,
+        {
+          method: "DELETE",
+          credentials: "same-origin",
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete package");
+      }
+      await res.json();
+    }
+    loadPackages();
+    loadOverview();
+  } catch (err) {
+    console.error(err);
+    alert(`Error: ${err.message || "Failed to delete package"}`);
+  }
+}
+
 
 async function loadCommunityPosts() {
   try {
@@ -826,7 +957,7 @@ async function loadCommunityPosts() {
       document.getElementById("filter-community-category").value;
 
     let data;
-    if (USE_MOCK) {
+    if (USE_MOCK.community) {
       data = mock.community.filter((p) => {
         if (status && p.status !== status) return false;
         if (category && p.category !== category) return false;
@@ -837,10 +968,14 @@ async function loadCommunityPosts() {
       if (status) params.set("status", status);
       if (category) params.set("category", category);
       const res = await fetch(
-        `/api/admin/community/posts?${params.toString()}`
+        `/api/admin/community/posts?${params.toString()}`,
+        { credentials: "same-origin" }
       );
-      if (!res.ok) throw new Error("Failed to load community posts");
-      data = (await res.json()).data;
+      if (!res.ok) {
+        throw new Error("Failed to load community posts");
+      }
+      const responseData = await res.json();
+      data = responseData.data || [];
     }
 
     const tbody = document.getElementById("community-table-body");
@@ -882,13 +1017,14 @@ async function loadCommunityPosts() {
       });
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function updateCommunityPostStatus(postId, status) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.community) {
       const p = mock.community.find((x) => x.post_id === postId);
       if (p) p.status = status;
     } else {
@@ -897,6 +1033,7 @@ async function updateCommunityPostStatus(postId, status) {
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({ status }),
         }
       );
@@ -905,30 +1042,41 @@ async function updateCommunityPostStatus(postId, status) {
     }
     loadCommunityPosts();
   } catch (err) {
-    console.error(err);
+    console.error("Error loading overview:", err);
+    alert("Failed to load overview: " + err.message);
   }
 }
 
 async function deleteCommunityPost(postId) {
   try {
-    if (USE_MOCK) {
+    if (USE_MOCK.community) {
       const idx = mock.community.findIndex((x) => x.post_id === postId);
       if (idx >= 0) mock.community.splice(idx, 1);
     } else {
       const res = await fetch(
         `/api/admin/community/posts/${encodeURIComponent(postId)}`,
-        { method: "DELETE" }
+        { 
+          method: "DELETE",
+          credentials: "same-origin"
+        }
       );
-      if (!res.ok) throw new Error("Failed to delete post");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMsg = errorData.error || "Failed to delete post";
+        alert(`Error: ${errorMsg}`);
+        return;
+      }
+      
       await res.json();
     }
+    
     loadCommunityPosts();
   } catch (err) {
-    console.error(err);
+    alert(`Error: ${err.message || "Failed to delete post"}`);
   }
 }
 
-/* ---------- Helpers ---------- */
 
 function escapeHtml(str) {
   if (str === null || str === undefined) return "";

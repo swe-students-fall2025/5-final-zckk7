@@ -12,7 +12,7 @@
             <div style="height: 300px; background: linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.3)), url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1200&q=80'); background-size: cover; background-position: center;" class="d-flex align-items-center ps-5 text-white">
                 <div>
                     <h1 class="display-5 fw-bold">Welcome Home, {{ session.first_name if session.first_name else 'User' }}.</h1>
-                    <p class="lead mb-0">Monday, October 24 • Sunny</p>
+                    <p class="lead mb-0">{{ current_date }} • Sunny</p>
                 </div>
             </div>
         </div>
@@ -93,10 +93,24 @@
                 <span class="text-white-50 small text-uppercase spacing-1">Maintenance</span>
                 <i class="bi bi-plus-lg text-white"></i>
             </div>
-            <h4 class="mb-0 fw-bold">1 Pending</h4>
-            <div class="mt-2">
-                <small class="text-white-50">Fixing AC...</small>
-            </div>
+            {% if pending_count > 0 %}
+                <h4 class="mb-0 fw-bold">{{ pending_count }} Pending</h4>
+                <div class="mt-2">
+                    {% if maintenance_requests %}
+                        {% set latest_request = maintenance_requests[0] %}
+                        <small class="text-white-50">
+                            {{ latest_request.category if latest_request.category else 'Maintenance' }}{% if latest_request.description %}: {{ latest_request.description[:25] }}{% if latest_request.description|length > 25 %}...{% endif %}{% endif %}
+                        </small>
+                    {% else %}
+                        <small class="text-white-50">Maintenance requests</small>
+                    {% endif %}
+                </div>
+            {% else %}
+                <h4 class="mb-0 fw-bold">0 Pending</h4>
+                <div class="mt-2">
+                    <small class="text-white-50">All clear!</small>
+                </div>
+            {% endif %}
             
             <div class="mt-3 pt-3 border-top border-secondary">
                 <small class="text-warning"><i class="bi bi-lightning-charge-fill me-1"></i>New Request</small>
