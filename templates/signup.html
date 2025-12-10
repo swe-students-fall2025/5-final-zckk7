@@ -85,7 +85,7 @@
 
             <div class="mb-3">
               <label class="form-label small fw-bold text-uppercase text-muted" style="font-size: 0.7rem;">Apartment Number</label>
-              <input type="text" name="apartment_number" class="form-control rounded-3" placeholder="e.g. 4D, 5C" required pattern="[0-9]+[A-Za-z]" title="Format: number followed by letter (e.g., 4D, 5C)" oninvalid="this.setCustomValidity('Please enter your apartment number (e.g., 4D, 5C)')" oninput="this.setCustomValidity('')">
+              <input type="text" name="apartment_number" class="form-control rounded-3" placeholder="e.g. A-101, A-102" required pattern="A-[0-9]+" title="Format: A- followed by number (e.g., A-101)" oninvalid="this.setCustomValidity('Please enter your apartment number (e.g., A-101)')" oninput="this.setCustomValidity('')">
             </div>
 
             <div class="mb-3">

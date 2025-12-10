@@ -1,10 +1,10 @@
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-DB_NAME = "smart_apartment_db"
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0")
+DB_NAME = os.getenv("DB_NAME", "smart_apartment_db")
 
 client = MongoClient(MONGO_URI)
 db = client[DB_NAME]
@@ -45,12 +45,19 @@ def check_rules(reading):
 
 def run_engine():
     print("Alert Engine running...")
+    initial_delay = True
     while True:
         try:
-            cutoff_time = datetime.utcnow() - timedelta(seconds=10)
+            if initial_delay:
+                print("Waiting 30 seconds before first check to avoid startup burst...")
+                time.sleep(30)
+                initial_delay = False
+            
+            cutoff_time = datetime.now(timezone.utc) - timedelta(seconds=20)
             recent_readings = list(
                 db.sensor_readings.find({"timestamp": {"$gte": cutoff_time}})
             )
+            
             for reading in recent_readings:
                 alert_data = check_rules(reading)
                 if alert_data:
@@ -59,13 +66,13 @@ def run_engine():
                             "apartment_id": reading.get("apartment_id"),
                             "room": reading.get("room"),
                             "type": alert_data["type"],
-                            "status": "new",
-                            "timestamp": {"$gte": cutoff_time - timedelta(minutes=5)},
+                            "status": {"$in": ["new", "open"]},
+                            "timestamp": {"$gte": cutoff_time - timedelta(minutes=60)},
                         }
                     )
                     if not existing_alert:
                         new_alert = {
-                            "timestamp": datetime.utcnow(),
+                            "timestamp": datetime.now(timezone.utc),
                             "apartment_id": reading.get("apartment_id"),
                             "room": reading.get("room"),
                             "reading_id": reading.get("_id"),
@@ -75,10 +82,12 @@ def run_engine():
                             "status": "new",
                         }
                         db.alerts.insert_one(new_alert)
-                        print(f"Alert: {alert_data['message']}")
-            time.sleep(5)
+                        print(f"Alert created: {alert_data['message']}")
+            time.sleep(12)
         except Exception as e:
             print(f"Error in engine loop: {e}")
+            import traceback
+            traceback.print_exc()
             time.sleep(5)
 
 

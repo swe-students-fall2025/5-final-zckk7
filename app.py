@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from pymongo import MongoClient
 from bson import ObjectId
@@ -9,29 +9,31 @@ from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
 app.secret_key = "hanqi"
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-"""
-MONGO_URI = "mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0"
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    db = client.smart_apartment_db
-    client.admin.command('ping')
-    print("MongoDB connected successfully")
-except Exception as e:
-    print(f"MongoDB connection failed: {e}")
-    db = None
-    client = None
-"""
+@app.after_request
+def set_no_cache(response):
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
-MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://mongo:27017")
-MONGODB_DB = os.getenv("MONGODB_DB", "smart_apartment")
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0")
+MONGODB_DB = os.getenv("MONGODB_DB", "smart_apartment_db")
 
 try:
     client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
     db = client[MONGODB_DB]
     client.admin.command("ping")
     print("MongoDB connected successfully")
+    
+    db.sensor_readings.create_index([("apartment_id", 1), ("room", 1), ("sensor_type", 1), ("timestamp", -1)])
+    db.sensor_readings.create_index([("timestamp", -1)])
+    print("MongoDB indexes ensured")
 except Exception as e:
     print(f"MongoDB connection failed: {e}")
     db = None
@@ -51,11 +53,12 @@ def allowed_file(filename):
 def convert_objectid_to_str(obj):
     if isinstance(obj, ObjectId):
         return str(obj)
-    if isinstance(obj, dict):
+    elif isinstance(obj, dict):
         return {k: convert_objectid_to_str(v) for k, v in obj.items()}
-    if isinstance(obj, list):
+    elif isinstance(obj, list):
         return [convert_objectid_to_str(item) for item in obj]
-    return obj
+    else:
+        return obj
 
 
 @app.route("/")
@@ -93,30 +96,31 @@ def dashboard():
             alerts = list(db.alerts.find({"status": "new"}))
 
             apartment_id = session.get("apartment_number", "")
-            latest_docs = []
-            if apartment_id:
-                latest_docs = list(
-                    db.sensor_readings.find({"apartment_id": apartment_id})
-                    .sort([("timestamp", -1)])
-                    .limit(200)
-                )
-
             latest_by_type = {}
-            for d in latest_docs:
-                st = d.get("sensor_type")
-                if st and st not in latest_by_type:
-                    latest_by_type[st] = d
-                if len(latest_by_type) >= 4:
-                    break
+            
+            if apartment_id:
+                for sensor_type in ["temperature", "smoke", "noise", "motion"]:
+                    latest = db.sensor_readings.find_one(
+                        {"apartment_id": apartment_id, "sensor_type": sensor_type},
+                        sort=[("timestamp", -1), ("_id", -1)]
+                    )
+                    if latest:
+                        latest_by_type[sensor_type] = latest
+
+            temp_reading = latest_by_type.get("temperature", {})
+            smoke_reading = latest_by_type.get("smoke", {})
+            noise_reading = latest_by_type.get("noise", {})
+            motion_reading = latest_by_type.get("motion", {})
 
             if apartment_id:
                 sensor = {
                     "apartment_id": apartment_id,
-                    "temperature": latest_by_type.get("temperature", {}).get("value"),
-                    "smoke": latest_by_type.get("smoke", {}).get("value"),
-                    "noise": latest_by_type.get("noise", {}).get("value"),
-                    "motion": latest_by_type.get("motion", {}).get("value"),
-                    "timestamp": latest_docs[0].get("timestamp") if latest_docs else None,
+                    "temperature": temp_reading.get("value") if temp_reading else None,
+                    "smoke": smoke_reading.get("value") if smoke_reading else None,
+                    "noise": noise_reading.get("value") if noise_reading else None,
+                    "motion": motion_reading.get("value") if motion_reading else None,
+                    "humidity": noise_reading.get("value") if noise_reading else None,
+                    "timestamp": temp_reading.get("timestamp") if temp_reading else None,
                 }
             else:
                 sensor = None
@@ -644,6 +648,7 @@ def signup():
                         "password": hashed_pw,
                         "role": role
                     })
+                    session.permanent = True
                     session["username"] = username
                     session["first_name"] = first_name
                     session["apartment_number"] = apartment_number
@@ -672,6 +677,7 @@ def login():
             try:
                 user = db.users.find_one({"username": username})
                 if user and check_password_hash(user["password"], password):
+                    session.permanent = True
                     session["username"] = username
                     session["first_name"] = user.get("first_name", "User")
                     session["apartment_number"] = user.get("apartment_number", "")
@@ -744,6 +750,8 @@ def admin_overview():
                 alert["created_at"] = alert["timestamp"].isoformat()
             elif "created_at" in alert and isinstance(alert["created_at"], datetime):
                 alert["created_at"] = alert["created_at"].isoformat()
+            if "room" in alert and "room_id" not in alert:
+                alert["room_id"] = alert["room"]
         
         for req in recent_maintenance:
             req["_id"] = str(req["_id"])
@@ -774,7 +782,7 @@ def admin_overview():
         return jsonify({"error": f"Failed to load overview: {str(e)}"}), 500
 
 
-@app.route("/api/admin/alerts", methods=["GET"])
+@app.route("/api/admin/alerts", methods=["GET", "DELETE"])
 def admin_alerts():
     if "username" not in session or session.get("role") != "admin":
         return jsonify({"error": "Unauthorized"}), 401
@@ -783,6 +791,16 @@ def admin_alerts():
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
+        if request.method == "DELETE":
+            try:
+                result = db.alerts.delete_many({})
+                return jsonify({"message": f"Deleted {result.deleted_count} alerts successfully", "deleted_count": result.deleted_count})
+            except Exception as delete_error:
+                print(f"Error deleting alerts: {delete_error}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": f"Failed to delete alerts: {str(delete_error)}"}), 500
+        
         severity = request.args.get("severity", "").strip()
         status = request.args.get("status", "").strip()
         
@@ -804,14 +822,19 @@ def admin_alerts():
                 alert["created_at"] = alert["timestamp"].isoformat()
             elif "created_at" in alert and isinstance(alert["created_at"], datetime):
                 alert["created_at"] = alert["created_at"].isoformat()
+            if "room" in alert and "room_id" not in alert:
+                alert["room_id"] = alert["room"]
         
         return jsonify({"data": convert_objectid_to_str(alerts)})
     except Exception as e:
-        print(f"Error loading alerts: {e}")
-        return jsonify({"error": "Failed to load alerts"}), 500
+        print(f"Error in alerts API: {e}")
+        import traceback
+        traceback.print_exc()
+        error_msg = str(e) if str(e) else "Failed to process request"
+        return jsonify({"error": error_msg}), 500
 
 
-@app.route("/api/admin/alerts/<alert_id>", methods=["PATCH"])
+@app.route("/api/admin/alerts/<alert_id>", methods=["PATCH", "DELETE"])
 def update_alert_status(alert_id):
     if "username" not in session or session.get("role") != "admin":
         return jsonify({"error": "Unauthorized"}), 401
@@ -820,21 +843,28 @@ def update_alert_status(alert_id):
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
-        data = request.get_json()
-        new_status = data.get("status", "").strip()
+        if request.method == "DELETE":
+            result = db.alerts.delete_one({"_id": ObjectId(alert_id)})
+            if result.deleted_count == 0:
+                return jsonify({"error": "Alert not found"}), 404
+            return jsonify({"message": "Alert deleted successfully"})
         
-        if new_status not in ["open", "resolved", "ignored"]:
-            return jsonify({"error": "Invalid status"}), 400
-        
-        result = db.alerts.update_one(
-            {"_id": ObjectId(alert_id)},
-            {"$set": {"status": new_status}}
-        )
-        
-        if not result or result.matched_count == 0:
-            return jsonify({"error": "Alert not found"}), 404
-        
-        return jsonify({"success": True})
+        elif request.method == "PATCH":
+            data = request.get_json()
+            new_status = data.get("status", "").strip()
+            
+            if new_status not in ["open", "resolved", "ignored"]:
+                return jsonify({"error": "Invalid status"}), 400
+            
+            result = db.alerts.update_one(
+                {"_id": ObjectId(alert_id)},
+                {"$set": {"status": new_status}}
+            )
+            
+            if not result or result.matched_count == 0:
+                return jsonify({"error": "Alert not found"}), 404
+            
+            return jsonify({"success": True})
     except Exception as e:
         print(f"Error updating alert: {e}")
         return jsonify({"error": "Failed to update alert"}), 500

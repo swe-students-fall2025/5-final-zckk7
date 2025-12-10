@@ -1,7 +1,7 @@
 const USE_MOCK = {
   overview: false,
-  alerts: true,
-  rooms: true,
+  alerts: false,
+  rooms: false,
   maintenance: false,
   packages: false,
   community: false
@@ -148,12 +148,20 @@ const mock = {
   ],
 };
 
+let autoRefreshInterval = null;
+const AUTO_REFRESH_INTERVAL = 30000;
+
 document.addEventListener("DOMContentLoaded", () => {
   setupNavigation();
   setupPackagesModal();
   setupRefreshButtons();
   setupLogout();
-  loadOverview();
+  loadPageFromHash();
+  startAutoRefresh();
+});
+
+window.addEventListener("hashchange", () => {
+  loadPageFromHash();
 });
 
 function setSection(title, subtitle, sectionId) {
@@ -166,64 +174,92 @@ function setSection(title, subtitle, sectionId) {
   if (target) target.classList.add("visible");
 }
 
+function loadPageFromHash() {
+  const hash = window.location.hash.slice(1) || "overview";
+  const navItems = document.querySelectorAll(".nav-item");
+  navItems.forEach((b) => b.classList.remove("active"));
+  
+  let targetBtn = null;
+  navItems.forEach((btn) => {
+    if (btn.dataset.section === hash) {
+      btn.classList.add("active");
+      targetBtn = btn;
+    }
+  });
+  
+  if (!targetBtn && navItems.length > 0) {
+    navItems[0].classList.add("active");
+    window.location.hash = navItems[0].dataset.section;
+    return;
+  }
+  
+  const section = hash;
+  switch (section) {
+    case "overview":
+      setSection(
+        "Overview",
+        "Building status at a glance",
+        "section-overview"
+      );
+      loadOverview();
+      break;
+    case "sensors":
+      setSection(
+        "Sensors & Rooms",
+        "Monitor room sensor readings",
+        "section-sensors"
+      );
+      loadRooms();
+      break;
+    case "alerts":
+      setSection(
+        "Alerts",
+        "Filter and manage safety alerts",
+        "section-alerts"
+      );
+      loadAlerts();
+      break;
+    case "maintenance":
+      setSection(
+        "Maintenance",
+        "Manage maintenance requests",
+        "section-maintenance"
+      );
+      loadMaintenance();
+      break;
+    case "packages":
+      setSection(
+        "Packages",
+        "Track deliveries and pickups",
+        "section-packages"
+      );
+      loadPackages();
+      break;
+    case "community":
+      setSection(
+        "Community",
+        "Moderate community exchange posts",
+        "section-community"
+      );
+      loadCommunityPosts();
+      break;
+    default:
+      setSection(
+        "Overview",
+        "Building status at a glance",
+        "section-overview"
+      );
+      loadOverview();
+      window.location.hash = "overview";
+  }
+}
+
 function setupNavigation() {
   const navItems = document.querySelectorAll(".nav-item");
   navItems.forEach((btn) => {
     btn.addEventListener("click", () => {
-      navItems.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-
       const section = btn.dataset.section;
-      switch (section) {
-        case "overview":
-          setSection(
-            "Overview",
-            "Building status at a glance",
-            "section-overview"
-          );
-          loadOverview();
-          break;
-        case "sensors":
-          setSection(
-            "Sensors & Rooms",
-            "Monitor room sensor readings",
-            "section-sensors"
-          );
-          loadRooms();
-          break;
-        case "alerts":
-          setSection(
-            "Alerts",
-            "Filter and manage safety alerts",
-            "section-alerts"
-          );
-          loadAlerts();
-          break;
-        case "maintenance":
-          setSection(
-            "Maintenance",
-            "Manage maintenance requests",
-            "section-maintenance"
-          );
-          loadMaintenance();
-          break;
-        case "packages":
-          setSection(
-            "Packages",
-            "Track deliveries and pickups",
-            "section-packages"
-          );
-          loadPackages();
-          break;
-        case "community":
-          setSection(
-            "Community",
-            "Moderate community exchange posts",
-            "section-community"
-          );
-          loadCommunityPosts();
-          break;
-      }
+      window.location.hash = section;
     });
   });
 }
@@ -231,6 +267,9 @@ function setupNavigation() {
 function setupRefreshButtons() {
   const btnAlerts = document.getElementById("btn-alerts-refresh");
   if (btnAlerts) btnAlerts.addEventListener("click", loadAlerts);
+  
+  const btnDeleteAll = document.getElementById("btn-alerts-delete-all");
+  if (btnDeleteAll) btnDeleteAll.addEventListener("click", deleteAllAlerts);
   
   const filterAlertsSeverity = document.getElementById("filter-alerts-severity");
   if (filterAlertsSeverity) filterAlertsSeverity.addEventListener("change", loadAlerts);
@@ -269,7 +308,36 @@ function setupLogout() {
   });
 }
 
-/* ---------- Overview ---------- */
+function startAutoRefresh() {
+  if (autoRefreshInterval) {
+    clearInterval(autoRefreshInterval);
+  }
+  
+  autoRefreshInterval = setInterval(() => {
+    const hash = window.location.hash.slice(1) || "overview";
+    switch (hash) {
+      case "overview":
+        loadOverview();
+        break;
+      case "sensors":
+        loadRooms();
+        break;
+      case "alerts":
+        loadAlerts();
+        break;
+      case "maintenance":
+        loadMaintenance();
+        break;
+      case "packages":
+        loadPackages();
+        break;
+      case "community":
+        loadCommunityPosts();
+        break;
+    }
+  }, AUTO_REFRESH_INTERVAL);
+}
+
 
 async function loadOverview() {
   try {
@@ -285,9 +353,7 @@ async function loadOverview() {
         throw new Error(errorData.error || "Failed to load overview");
       }
       const payload = await res.json();
-      console.log("Overview API response:", payload);
       data = payload.data || payload;
-      console.log("Overview data:", data);
       
       if (USE_MOCK.alerts) {
         const mockData = buildOverviewFromMock();
@@ -371,8 +437,9 @@ async function loadRooms() {
     if (USE_MOCK.rooms) {
       data = mock.rooms;
     } else {
-      const res = await fetch("/api/admin/rooms", {
-        credentials: "same-origin"
+      const res = await fetch("/api/admin/rooms?t=" + Date.now(), {
+        credentials: "same-origin",
+        cache: "no-store"
       });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -429,7 +496,13 @@ function renderRoomsList(rooms) {
     )}
       </span>
       <span class="list-item-room-subtitle">
-        Last update: ${formatTime(room.latest_readings?.temperature?.timestamp)}
+        Last update: ${formatTime(
+          room.latest_readings?.temperature?.timestamp || 
+          room.latest_readings?.smoke?.timestamp ||
+          room.latest_readings?.noise?.timestamp ||
+          room.latest_readings?.motion?.timestamp ||
+          ""
+        )}
       </span>
     `;
 
@@ -462,14 +535,14 @@ async function loadRoomDetail(roomId) {
       data = { readings: mock.roomHistories[roomId] || [] };
     } else {
       const res = await fetch(
-        `/api/admin/rooms/${encodeURIComponent(roomId)}/history`,
-        { credentials: "same-origin" }
+        `/api/admin/rooms/${encodeURIComponent(roomId)}/history?t=${Date.now()}`,
+        { credentials: "same-origin", cache: "no-store" }
       );
       if (!res.ok) throw new Error("Failed to load room history");
       data = (await res.json()).data;
     }
 
-    const latest = data.readings?.[data.readings.length - 1] || {};
+    const latest = data.readings?.[0] || {};
 
     bodyEl.innerHTML = `
       <div class="grid-2">
@@ -500,7 +573,7 @@ async function loadRoomDetail(roomId) {
             </thead>
             <tbody>
               ${data.readings
-                .slice(-10)
+                .slice(0, 10)
                 .map(
                   (r) => `
                 <tr>
@@ -544,8 +617,12 @@ async function loadAlerts() {
       const res = await fetch(`/api/admin/alerts?${params.toString()}`, {
         credentials: "same-origin"
       });
-      if (!res.ok) throw new Error("Failed to load alerts");
-      data = (await res.json()).data;
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to load alerts");
+      }
+      const payload = await res.json();
+      data = payload.data || payload;
     }
 
     const tbody = document.getElementById("alerts-table-body");
@@ -563,10 +640,11 @@ async function loadAlerts() {
         <td>${renderStatusBadge(alert.status)}</td>
         <td>
           ${
-            alert.status === "open"
-              ? `<button class="btn small secondary" data-alert-id="${alert.alert_id}">Resolve</button>`
+            alert.status === "open" || alert.status === "new"
+              ? `<button class="btn small secondary" data-alert-id="${alert.alert_id}" data-action="resolve">Resolve</button>`
               : ""
           }
+          <button class="btn small danger ms-2" data-alert-id="${alert.alert_id}" data-action="delete">Delete</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -575,12 +653,17 @@ async function loadAlerts() {
     tbody.querySelectorAll("button[data-alert-id]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.alertId;
-        updateAlertStatus(id, "resolved");
+        const action = btn.dataset.action;
+        if (action === "delete") {
+          deleteAlert(id);
+        } else if (action === "resolve") {
+          updateAlertStatus(id, "resolved");
+        }
       });
     });
   } catch (err) {
-    console.error("Error loading overview:", err);
-    alert("Failed to load overview: " + err.message);
+    console.error("Error loading alerts:", err);
+    alert("Failed to load alerts: " + err.message);
   }
 }
 
@@ -605,8 +688,73 @@ async function updateAlertStatus(alertId, status) {
     loadAlerts();
     loadOverview();
   } catch (err) {
-    console.error("Error loading overview:", err);
-    alert("Failed to load overview: " + err.message);
+    console.error("Error updating alert status:", err);
+    alert("Failed to update alert status: " + err.message);
+  }
+}
+
+async function deleteAlert(alertId) {
+  if (!confirm("Are you sure you want to delete this alert?")) {
+    return;
+  }
+  
+  try {
+    if (USE_MOCK.alerts) {
+      const index = mock.alerts.findIndex((x) => x.alert_id === alertId);
+      if (index !== -1) {
+        mock.alerts.splice(index, 1);
+      }
+      loadAlerts();
+      loadOverview();
+    } else {
+      const res = await fetch(
+        `/api/admin/alerts/${encodeURIComponent(alertId)}`,
+        {
+          method: "DELETE",
+          credentials: "same-origin"
+        }
+      );
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete alert");
+      }
+      await res.json();
+      loadAlerts();
+      loadOverview();
+    }
+  } catch (err) {
+    console.error("Error deleting alert:", err);
+    alert("Failed to delete alert: " + err.message);
+  }
+}
+
+async function deleteAllAlerts() {
+  if (!confirm("Are you sure you want to delete ALL alerts? This action cannot be undone.")) {
+    return;
+  }
+  
+  try {
+    if (USE_MOCK.alerts) {
+      mock.alerts = [];
+      loadAlerts();
+      loadOverview();
+    } else {
+      const res = await fetch("/api/admin/alerts", {
+        method: "DELETE",
+        credentials: "same-origin"
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete all alerts");
+      }
+      const result = await res.json();
+      alert(`Successfully deleted ${result.deleted_count || 0} alerts`);
+      loadAlerts();
+      loadOverview();
+    }
+  } catch (err) {
+    console.error("Error deleting all alerts:", err);
+    alert("Failed to delete all alerts: " + err.message);
   }
 }
 
