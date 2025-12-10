@@ -5,28 +5,32 @@ from pymongo import MongoClient
 from bson import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-
+import certifi
 
 app = Flask(__name__)
 app.secret_key = "hanqi"
 
-MONGO_URI = "mongodb+srv://gz:1234@cluster0.fv25oph.mongodb.net/?appName=Cluster0"
-
-try:
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
-    db = client.smart_apartment_db
-    client.admin.command('ping')
-    print("MongoDB connected successfully")
-except Exception as e:
-    print(f"MongoDB connection failed: {e}")
-    db = None
-    client = None
-
 UPLOAD_FOLDER = "static/uploads"
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+MONGO_URI = "mongodb+srv://app_user:7oVLGtXe9dUQWnlB@cluster0.fv25oph.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+
+db = None
+try:
+    client = MongoClient(
+        MONGO_URI,
+        tlsCAFile=certifi.where(),
+        serverSelectionTimeoutMS=5000,
+    )
+    client.admin.command("ping")
+    db = client.smart_apartment_db
+    print("MongoDB connected successfully")
+except Exception as e:
+    print("MongoDB connection failed:")
+    print(e)
+    client = None
 
 
 def allowed_file(filename):
@@ -380,5 +384,21 @@ def logout():
     return redirect(url_for("login"))
 
 
+@app.route("/test_mongo")
+def test_mongo():
+    if db is None:
+        return "MongoDB not connected", 500
+    try:
+        collections = db.list_collection_names()
+        return f"MongoDB OK! Collections: {collections}"
+    except Exception as e:
+        return f"MongoDB error: {e}", 500
+
+
+def print_routes():
+    for rule in app.url_map.iter_rules():
+        print(rule, "->", rule.endpoint)
+
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True, host="0.0.0.0", port=5001)
