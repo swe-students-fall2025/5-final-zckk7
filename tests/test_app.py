@@ -434,19 +434,22 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_maintenance_post_success(self, mock_db):
+        mock_db.users.find_one.return_value = None
         mock_db.maintenance_requests.insert_one.return_value = MagicMock()
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'testuser'
             sess['role'] = 'resident'
             sess['apartment_number'] = 'A-101'
+            sess['first_name'] = 'Test'
+            sess['last_name'] = 'User'
         
         response = self.client.post('/maintenance/new', data={
-            'issue_type': 'Plumbing',
+            'category': 'Plumbing',
             'description': 'Leaky faucet',
             'urgency': 'medium'
-        }, follow_redirects=False)
-        self.assertEqual(response.status_code, 302)
+        })
+        self.assertEqual(response.status_code, 200)
     
     @patch('app.db')
     def test_maintenance_post_missing_fields(self, mock_db):
@@ -513,19 +516,26 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_admin_packages_post(self, mock_db):
-        mock_db.packages.insert_one.return_value = MagicMock()
-        mock_db.packages.find.return_value = []
+        mock_user = {
+            "_id": ObjectId(),
+            "username": "johndoe",
+            "first_name": "John",
+            "last_name": "Doe",
+            "apartment_number": "A-101"
+        }
+        mock_db.users.find_one.return_value = mock_user
+        mock_db.packages.insert_one.return_value = MagicMock(inserted_id=ObjectId())
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'admin'
             sess['role'] = 'admin'
         
         response = self.client.post('/api/admin/packages', json={
-            'tracking': 'TRACK123',
-            'resident_name': 'John Doe',
-            'apartment_number': 'A-101'
+            'resident_id': 'johndoe',
+            'carrier': 'UPS',
+            'location': 'Lobby'
         })
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 201)
     
     @patch('app.db')
     def test_update_package_status_patch(self, mock_db):
