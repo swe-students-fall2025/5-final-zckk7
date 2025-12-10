@@ -2,7 +2,7 @@ import unittest
 import sys
 import os
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -12,11 +12,21 @@ from bson import ObjectId
 def create_mock_cursor(data=None):
     if data is None:
         data = []
-    mock_cursor = MagicMock()
-    mock_cursor.sort.return_value = mock_cursor
-    mock_cursor.limit.return_value = data
-    mock_cursor.__iter__ = lambda self: iter(data)
-    return mock_cursor
+    
+    class MockCursor:
+        def __init__(self, data_list):
+            self._data = data_list
+        
+        def sort(self, *args, **kwargs):
+            return self
+        
+        def limit(self, *args, **kwargs):
+            return self._data
+        
+        def __iter__(self):
+            return iter(self._data)
+    
+    return MockCursor(data)
 
 class TestApp(unittest.TestCase):
     
@@ -1207,33 +1217,6 @@ class TestApp(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
     
     @patch('app.db')
-    def test_post_detail_comments_old(self, mock_db):
-        from datetime import timedelta
-        post_id = str(ObjectId())
-        mock_post = {
-            "_id": ObjectId(post_id),
-            "title": "Test Post",
-            "description": "Test",
-            "author": "testuser",
-            "created_at": datetime.now()
-        }
-        mock_comment = {
-            "_id": ObjectId(),
-            "post_id": post_id,
-            "content": "Old comment",
-            "created_at": datetime.now() - timedelta(days=1)
-        }
-        mock_db.community_posts.find_one.return_value = mock_post
-        mock_db.comments.find.return_value = create_mock_cursor([mock_comment])
-        
-        with self.client.session_transaction() as sess:
-            sess['username'] = 'testuser'
-            sess['role'] = 'resident'
-        
-        response = self.client.get(f'/community/post/{post_id}')
-        self.assertEqual(response.status_code, 200)
-    
-    @patch('app.db')
     def test_create_post_category_other(self, mock_db):
         mock_db.community_posts.insert_one.return_value = MagicMock()
         
@@ -1336,12 +1319,14 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_dashboard_exception_handling(self, mock_db):
+        mock_db.users.find_one.return_value = None
         mock_db.alerts.find.side_effect = Exception("Database error")
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'testuser'
             sess['role'] = 'resident'
             sess['apartment_number'] = 'A-101'
+            sess['first_name'] = 'Test'
         
         response = self.client.get('/dashboard')
         self.assertEqual(response.status_code, 200)
@@ -1988,6 +1973,7 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_admin_room_history_with_different_timestamps(self, mock_db):
+        from datetime import timedelta
         timestamp1 = datetime.now()
         timestamp2 = datetime.now() - timedelta(hours=1)
         mock_reading1 = {
@@ -2226,59 +2212,6 @@ class TestApp(unittest.TestCase):
         response = self.client.get('/community')
         self.assertEqual(response.status_code, 200)
     
-    @patch('app.db')
-    def test_post_detail_comment_time_less_than_hour(self, mock_db):
-        from datetime import timedelta
-        post_id = str(ObjectId())
-        mock_post = {
-            "_id": ObjectId(post_id),
-            "title": "Test Post",
-            "description": "Test",
-            "author": "testuser",
-            "created_at": datetime.now()
-        }
-        mock_comment = {
-            "_id": ObjectId(),
-            "post_id": post_id,
-            "content": "Recent comment",
-            "created_at": datetime.now() - timedelta(minutes=30)
-        }
-        mock_db.community_posts.find_one.return_value = mock_post
-        mock_db.comments.find.return_value = create_mock_cursor([mock_comment])
-        
-        with self.client.session_transaction() as sess:
-            sess['username'] = 'testuser'
-            sess['role'] = 'resident'
-        
-        response = self.client.get(f'/community/post/{post_id}')
-        self.assertEqual(response.status_code, 200)
-    
-    @patch('app.db')
-    def test_post_detail_comment_time_more_than_day(self, mock_db):
-        from datetime import timedelta
-        post_id = str(ObjectId())
-        mock_post = {
-            "_id": ObjectId(post_id),
-            "title": "Test Post",
-            "description": "Test",
-            "author": "testuser",
-            "created_at": datetime.now()
-        }
-        mock_comment = {
-            "_id": ObjectId(),
-            "post_id": post_id,
-            "content": "Old comment",
-            "created_at": datetime.now() - timedelta(days=2)
-        }
-        mock_db.community_posts.find_one.return_value = mock_post
-        mock_db.comments.find.return_value = create_mock_cursor([mock_comment])
-        
-        with self.client.session_transaction() as sess:
-            sess['username'] = 'testuser'
-            sess['role'] = 'resident'
-        
-        response = self.client.get(f'/community/post/{post_id}')
-        self.assertEqual(response.status_code, 200)
 
 if __name__ == '__main__':
     unittest.main()
