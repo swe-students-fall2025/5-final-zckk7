@@ -68,6 +68,64 @@ class TestAlertEngine(unittest.TestCase):
         reading = {**self.base_reading, "sensor_type": "unknown"}
         result = check_rules(reading)
         self.assertIsNone(result)
+    
+    def test_smoke_detection_bool_true(self):
+        reading = {**self.base_reading, "sensor_type": "smoke", "value": True}
+        result = check_rules(reading)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "Fire Safety")
+        self.assertEqual(result["severity"], "high")
+    
+    def test_high_humidity(self):
+        reading = {**self.base_reading, "sensor_type": "humidity", "value": 80.0}
+        result = check_rules(reading)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "Humidity")
+        self.assertEqual(result["severity"], "low")
+    
+    def test_normal_humidity(self):
+        reading = {**self.base_reading, "sensor_type": "humidity", "value": 50.0}
+        result = check_rules(reading)
+        self.assertIsNone(result)
+    
+    def test_temperature_boundary_high(self):
+        reading = {**self.base_reading, "sensor_type": "temperature", "value": 36.0}
+        result = check_rules(reading)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "High Temp")
+    
+    def test_temperature_boundary_low(self):
+        reading = {**self.base_reading, "sensor_type": "temperature", "value": 9.0}
+        result = check_rules(reading)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "Low Temp")
+    
+    def test_temperature_exact_threshold_high(self):
+        reading = {**self.base_reading, "sensor_type": "temperature", "value": 35.0}
+        result = check_rules(reading)
+        self.assertIsNone(result)
+    
+    def test_temperature_exact_threshold_low(self):
+        reading = {**self.base_reading, "sensor_type": "temperature", "value": 10.0}
+        result = check_rules(reading)
+        self.assertIsNone(result)
+    
+    def test_humidity_boundary(self):
+        reading = {**self.base_reading, "sensor_type": "humidity", "value": 71.0}
+        result = check_rules(reading)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "Humidity")
+    
+    def test_humidity_exact_threshold(self):
+        reading = {**self.base_reading, "sensor_type": "humidity", "value": 70.0}
+        result = check_rules(reading)
+        self.assertIsNone(result)
+    
+    def test_missing_room_field(self):
+        reading = {"apartment_id": "A-101", "sensor_type": "smoke", "value": 1}
+        result = check_rules(reading)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["type"], "Fire Safety")
 
 if __name__ == '__main__':
     unittest.main()
