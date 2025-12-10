@@ -96,30 +96,31 @@ def dashboard():
             alerts = list(db.alerts.find({"status": "new"}))
 
             apartment_id = session.get("apartment_number", "")
-            latest_docs = []
-            if apartment_id:
-                latest_docs = list(
-                    db.sensor_readings.find({"apartment_id": apartment_id})
-                    .sort("timestamp", -1)
-                    .limit(200)
-                )
-
             latest_by_type = {}
-            for d in latest_docs:
-                st = d.get("sensor_type")
-                if st and st not in latest_by_type:
-                    latest_by_type[st] = d
-                if len(latest_by_type) >= 4:
-                    break
+            
+            if apartment_id:
+                for sensor_type in ["temperature", "smoke", "noise", "motion"]:
+                    latest = db.sensor_readings.find_one(
+                        {"apartment_id": apartment_id, "sensor_type": sensor_type},
+                        sort=[("timestamp", -1), ("_id", -1)]
+                    )
+                    if latest:
+                        latest_by_type[sensor_type] = latest
+
+            temp_reading = latest_by_type.get("temperature", {})
+            smoke_reading = latest_by_type.get("smoke", {})
+            noise_reading = latest_by_type.get("noise", {})
+            motion_reading = latest_by_type.get("motion", {})
 
             if apartment_id:
                 sensor = {
                     "apartment_id": apartment_id,
-                    "temperature": latest_by_type.get("temperature", {}).get("value"),
-                    "smoke": latest_by_type.get("smoke", {}).get("value"),
-                    "noise": latest_by_type.get("noise", {}).get("value"),
-                    "motion": latest_by_type.get("motion", {}).get("value"),
-                    "timestamp": latest_docs[0].get("timestamp") if latest_docs else None,
+                    "temperature": temp_reading.get("value") if temp_reading else None,
+                    "smoke": smoke_reading.get("value") if smoke_reading else None,
+                    "noise": noise_reading.get("value") if noise_reading else None,
+                    "motion": motion_reading.get("value") if motion_reading else None,
+                    "humidity": noise_reading.get("value") if noise_reading else None,
+                    "timestamp": temp_reading.get("timestamp") if temp_reading else None,
                 }
             else:
                 sensor = None
@@ -618,6 +619,8 @@ def signup():
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         apartment_number = request.form.get("apartment_number", "").strip().upper()
+        if apartment_number and not apartment_number.startswith("A-"):
+            apartment_number = f"A-{apartment_number.replace('A-', '')}"
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "")
