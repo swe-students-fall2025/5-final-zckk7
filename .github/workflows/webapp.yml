@@ -62,13 +62,32 @@ jobs:
           username: ${{ secrets.DIGITALOCEAN_USERNAME }}
           key: ${{ secrets.DIGITALOCEAN_SSH_KEY }}
           script: |
+            mkdir -p /opt/smart_apartment/uploads
+            chmod 755 /opt/smart_apartment/uploads
             docker pull ${{ secrets.DOCKER_USERNAME }}/smart-apartment-webapp:latest
             docker stop smart_apartment_webapp || true
             docker rm smart_apartment_webapp || true
             docker run -d --name smart_apartment_webapp \
               -p 5001:5001 \
+              -v /opt/smart_apartment/uploads:/app/static/uploads \
               -e MONGODB_URI="${{ secrets.MONGODB_URI }}" \
               -e MONGODB_DB="${{ secrets.MONGODB_DB }}" \
               --restart always \
               ${{ secrets.DOCKER_USERNAME }}/smart-apartment-webapp:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/smart-apartment-simulator:latest
+            docker stop smart_apartment_simulator || true
+            docker rm smart_apartment_simulator || true
+            docker run -d --name smart_apartment_simulator \
+              -e MONGODB_URI="${{ secrets.MONGODB_URI }}" \
+              -e MONGODB_DB="${{ secrets.MONGODB_DB }}" \
+              --restart always \
+              ${{ secrets.DOCKER_USERNAME }}/smart-apartment-simulator:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/smart-apartment-alert-engine:latest
+            docker stop smart_apartment_alert_engine || true
+            docker rm smart_apartment_alert_engine || true
+            docker run -d --name smart_apartment_alert_engine \
+              -e MONGO_URI="${{ secrets.MONGODB_URI }}" \
+              -e DB_NAME="${{ secrets.MONGODB_DB }}" \
+              --restart always \
+              ${{ secrets.DOCKER_USERNAME }}/smart-apartment-alert-engine:latest
 
