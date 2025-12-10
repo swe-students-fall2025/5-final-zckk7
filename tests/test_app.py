@@ -982,7 +982,7 @@ class TestApp(unittest.TestCase):
                 'last_name': 'User',
                 'username': 'adminuser',
                 'password': 'password123',
-                'apartment_number': 'A-001',
+                'apartment_number': 'A-101',
                 'role': 'admin'
             }, follow_redirects=False)
             self.assertEqual(response.status_code, 302)
