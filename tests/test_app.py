@@ -2,6 +2,7 @@ import unittest
 import sys
 import os
 from unittest.mock import patch, MagicMock
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -400,6 +401,347 @@ class TestApp(unittest.TestCase):
     def test_convert_objectid_to_str_with_number(self):
         result = convert_objectid_to_str(123)
         self.assertEqual(result, 123)
+    
+    @patch('app.db')
+    def test_create_post_post_success(self, mock_db):
+        mock_db.community_posts.insert_one.return_value = MagicMock()
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+            sess['apartment_number'] = 'A-101'
+        
+        response = self.client.post('/community/create', data={
+            'title': 'Test Post',
+            'category': 'Food',
+            'description': 'Test description'
+        }, follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+    
+    @patch('app.db')
+    def test_create_post_missing_fields(self, mock_db):
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.post('/community/create', data={
+            'title': '',
+            'category': 'Food',
+            'description': 'Test'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'required', response.data)
+    
+    @patch('app.db')
+    def test_maintenance_post_success(self, mock_db):
+        mock_db.maintenance_requests.insert_one.return_value = MagicMock()
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+            sess['apartment_number'] = 'A-101'
+        
+        response = self.client.post('/maintenance/new', data={
+            'issue_type': 'Plumbing',
+            'description': 'Leaky faucet',
+            'urgency': 'medium'
+        }, follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+    
+    @patch('app.db')
+    def test_maintenance_post_missing_fields(self, mock_db):
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.post('/maintenance/new', data={
+            'issue_type': '',
+            'description': 'Test'
+        })
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_post_detail_with_session(self, mock_db):
+        post_id = str(ObjectId())
+        mock_db.community_posts.find_one.return_value = {
+            "_id": ObjectId(post_id),
+            "title": "Test Post",
+            "description": "Test",
+            "author": "testuser",
+            "created_at": datetime.now()
+        }
+        mock_db.comments.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get(f'/community/post/{post_id}')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_add_comment_post(self, mock_db):
+        post_id = str(ObjectId())
+        mock_db.community_posts.find_one.return_value = {"_id": ObjectId(post_id)}
+        mock_db.comments.insert_one.return_value = MagicMock()
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.post(f'/community/post/{post_id}/comment', data={
+            'comment': 'Test comment'
+        }, follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+    
+    @patch('app.db')
+    def test_delete_post_success(self, mock_db):
+        post_id = str(ObjectId())
+        mock_db.community_posts.find_one.return_value = {
+            "_id": ObjectId(post_id),
+            "author": "testuser"
+        }
+        mock_db.community_posts.delete_one.return_value = MagicMock()
+        mock_db.comments.delete_many.return_value = MagicMock()
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.post(f'/community/post/{post_id}/delete', follow_redirects=False)
+        self.assertEqual(response.status_code, 302)
+    
+    @patch('app.db')
+    def test_admin_packages_post(self, mock_db):
+        mock_db.packages.insert_one.return_value = MagicMock()
+        mock_db.packages.find.return_value = []
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.post('/api/admin/packages', json={
+            'tracking': 'TRACK123',
+            'resident_name': 'John Doe',
+            'apartment_number': 'A-101'
+        })
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_update_package_status_patch(self, mock_db):
+        package_id = str(ObjectId())
+        mock_db.packages.update_one.return_value = MagicMock(matched_count=1)
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.patch(f'/api/admin/packages/{package_id}', json={
+            'status': 'picked_up'
+        })
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_update_package_status_delete(self, mock_db):
+        package_id = str(ObjectId())
+        mock_db.packages.delete_one.return_value = MagicMock()
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.delete(f'/api/admin/packages/{package_id}')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_update_maintenance_status_patch(self, mock_db):
+        request_id = str(ObjectId())
+        mock_db.maintenance_requests.update_one.return_value = MagicMock(matched_count=1)
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.patch(f'/api/admin/maintenance/{request_id}', json={
+            'status': 'resolved'
+        })
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_community_posts_get(self, mock_db):
+        mock_db.community_posts.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.get('/api/admin/community/posts')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_community_post_patch(self, mock_db):
+        post_id = str(ObjectId())
+        mock_db.community_posts.update_one.return_value = MagicMock(matched_count=1)
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.patch(f'/api/admin/community/posts/{post_id}', json={
+            'status': 'closed'
+        })
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_community_post_delete(self, mock_db):
+        post_id = str(ObjectId())
+        mock_db.community_posts.find_one.return_value = {"_id": ObjectId(post_id)}
+        mock_db.community_posts.delete_one.return_value = MagicMock()
+        mock_db.comments.delete_many.return_value = MagicMock()
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.delete(f'/api/admin/community/posts/{post_id}')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_api_latest_sensor_readings_with_params(self, mock_db):
+        mock_reading = {
+            "_id": ObjectId(),
+            "apartment_id": "A-101",
+            "sensor_type": "temperature",
+            "value": 22.5,
+            "timestamp": datetime.now()
+        }
+        mock_db.sensor_readings.find_one.return_value = mock_reading
+        
+        response = self.client.get('/api/sensor_readings/latest?apartment_id=A-101&sensor_type=temperature')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_rooms_with_data(self, mock_db):
+        mock_db.rooms.find.return_value = [{
+            "_id": ObjectId(),
+            "apartment_id": "A-101",
+            "room_name": "room-1"
+        }]
+        mock_db.sensor_readings.find_one.return_value = None
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.get('/api/admin/rooms')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_rooms_no_rooms_with_sensor_readings(self, mock_db):
+        mock_db.rooms.find.return_value = []
+        mock_db.sensor_readings.count_documents.return_value = 10
+        mock_db.sensor_readings.aggregate.return_value = [{
+            "_id": {"apartment_id": "A-101", "room": "room-1"}
+        }]
+        mock_db.sensor_readings.find_one.return_value = None
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.get('/api/admin/rooms')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_login_post_wrong_password(self, mock_db):
+        mock_user = {
+            "_id": ObjectId(),
+            "username": "testuser",
+            "password": "$2b$12$test_hash",
+            "role": "resident",
+            "apartment_number": "A-101"
+        }
+        mock_db.users.find_one.return_value = mock_user
+        
+        with patch('app.check_password_hash', return_value=False):
+            response = self.client.post('/login', data={
+                'username': 'testuser',
+                'password': 'wrongpassword'
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(b'Invalid', response.data)
+    
+    @patch('app.db')
+    def test_signup_validation_errors(self, mock_db):
+        mock_db.users.find_one.return_value = None
+        
+        response = self.client.post('/signup', data={
+            'first_name': 'John',
+            'last_name': 'Doe',
+            'username': 'ab',
+            'password': '123',
+            'apartment_number': 'A-102',
+            'role': 'resident'
+        })
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_alerts_with_severity_filter(self, mock_db):
+        mock_db.alerts.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.get('/api/admin/alerts?severity=high')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_admin_alerts_with_status_filter(self, mock_db):
+        mock_db.alerts.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.get('/api/admin/alerts?status=new')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_community_with_category_filter(self, mock_db):
+        mock_db.community_posts.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get('/community?category=food')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_community_with_search(self, mock_db):
+        mock_db.community_posts.find.return_value = create_mock_cursor([])
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'testuser'
+            sess['role'] = 'resident'
+        
+        response = self.client.get('/community?search=test')
+        self.assertEqual(response.status_code, 200)
+    
+    @patch('app.db')
+    def test_update_alert_status_not_found(self, mock_db):
+        alert_id = str(ObjectId())
+        mock_db.alerts.update_one.return_value = MagicMock(matched_count=0)
+        
+        with self.client.session_transaction() as sess:
+            sess['username'] = 'admin'
+            sess['role'] = 'admin'
+        
+        response = self.client.patch(f'/api/admin/alerts/{alert_id}', json={
+            'status': 'resolved'
+        })
+        self.assertEqual(response.status_code, 404)
 
 if __name__ == '__main__':
     unittest.main()
