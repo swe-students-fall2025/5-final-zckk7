@@ -1142,68 +1142,6 @@ def admin_community_post(post_id):
         return jsonify({"error": "Failed to manage post"}), 500
 
 
-@app.route("/api/admin/overview")
-def admin_overview():
-    if "username" not in session or session.get("role") != "admin":
-        return jsonify({"error": "Unauthorized"}), 401
-    
-    if db is None:
-        return jsonify({"error": "Database unavailable"}), 500
-    
-    try:
-        alerts_today = list(db.alerts.find({"status": "new"}))
-        open_alerts = list(db.alerts.find({"status": {"$in": ["new", "open"]}}))
-        maintenance = list(db.maintenance_requests.find({"status": {"$ne": "resolved"}}))
-        unpicked_packages = list(db.packages.find({"status": {"$ne": "picked_up"}}))
-        
-        print(f"Admin overview - alerts_today: {len(alerts_today)}, open_alerts: {len(open_alerts)}, maintenance: {len(maintenance)}, packages: {len(unpicked_packages)}")
-        
-        recent_alerts_query = db.alerts.find()
-        recent_alerts_query = recent_alerts_query.sort("timestamp", -1)
-        recent_alerts = list(recent_alerts_query.limit(5))
-        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5))
-        
-        print(f"Admin overview - recent_alerts: {len(recent_alerts)}, recent_maintenance: {len(recent_maintenance)}")
-        
-        for alert in recent_alerts:
-            alert["_id"] = str(alert["_id"])
-            alert["alert_id"] = str(alert["_id"])
-            if "reading_id" in alert:
-                alert["reading_id"] = str(alert["reading_id"])
-            if "timestamp" in alert and isinstance(alert["timestamp"], datetime):
-                alert["created_at"] = alert["timestamp"].isoformat()
-            elif "created_at" in alert and isinstance(alert["created_at"], datetime):
-                alert["created_at"] = alert["created_at"].isoformat()
-        
-        for req in recent_maintenance:
-            req["_id"] = str(req["_id"])
-            req["request_id"] = str(req["_id"])
-            if "apartment_number" in req:
-                req["apartment_id"] = req["apartment_number"]
-            if "created_at" in req and isinstance(req["created_at"], datetime):
-                req["created_at"] = req["created_at"].isoformat()
-        
-        response_data = {
-            "data": {
-                "counts": {
-                    "alerts_total_today": len(alerts_today),
-                    "alerts_unresolved": len(open_alerts),
-                    "maintenance_open": len(maintenance),
-                    "packages_unpicked": len(unpicked_packages)
-                },
-                "recent_alerts": convert_objectid_to_str(recent_alerts),
-                "recent_maintenance": convert_objectid_to_str(recent_maintenance)
-            }
-        }
-        
-        return jsonify(response_data)
-    except Exception as e:
-        import traceback
-        print(f"Error loading overview: {e}")
-        print(traceback.format_exc())
-        return jsonify({"error": f"Failed to load overview: {str(e)}"}), 500
-
-
 @app.route("/api/admin/alerts", methods=["GET"])
 def admin_alerts():
     if "username" not in session or session.get("role") != "admin":

@@ -15,7 +15,7 @@ def check_rules(reading):
     sensor_type = reading.get("sensor_type")
     value = reading.get("value")
     room = reading.get("room")
-    if sensor_type == "smoke" and value is True:
+    if sensor_type == "smoke" and (value == 1 or value is True):
         return {
             "type": "Fire Safety",
             "severity": "high",
