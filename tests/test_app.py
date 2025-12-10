@@ -104,9 +104,12 @@ class TestApp(unittest.TestCase):
         
         with patch('app.generate_password_hash', return_value='hashed_password'):
             response = self.client.post('/signup', data={
+                'first_name': 'John',
+                'last_name': 'Doe',
                 'username': 'newuser',
                 'password': 'password123',
-                'apartment_number': 'A-102'
+                'apartment_number': 'A-102',
+                'role': 'resident'
             }, follow_redirects=False)
             self.assertEqual(response.status_code, 302)
     
@@ -186,10 +189,13 @@ class TestApp(unittest.TestCase):
             
             with patch('app.generate_password_hash', return_value='hashed'):
                 response = self.client.post('/signup', data={
+                    'first_name': 'Jane',
+                    'last_name': 'Smith',
                     'username': 'user1',
                     'password': 'pass123',
-                    'apartment_number': '102'
-                })
+                    'apartment_number': '102',
+                    'role': 'resident'
+                }, follow_redirects=False)
                 self.assertEqual(response.status_code, 302)
                 call_args = mock_db.users.insert_one.call_args[0][0]
                 self.assertEqual(call_args['apartment_number'], 'A-102')

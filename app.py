@@ -97,7 +97,7 @@ def dashboard():
             if apartment_id:
                 latest_docs = list(
                     db.sensor_readings.find({"apartment_id": apartment_id})
-                    .sort("timestamp", -1)
+                    .sort([("timestamp", -1)])
                     .limit(200)
                 )
 
@@ -131,7 +131,7 @@ def dashboard():
             all_pending = list(
                 db.maintenance_requests.find(
                     {"$or": query_conditions, "status": {"$ne": "resolved"}}
-                ).sort("created_at", -1)
+                ).sort([("created_at", -1)])
             )
 
             maintenance_requests = all_pending[:1] if all_pending else []
@@ -184,7 +184,7 @@ def packages():
                 query_conditions.append({"resident_name": {"$regex": full_name.replace(" ", ".*"), "$options": "i"}})
             
             query = {"$or": query_conditions}
-            pkgs_raw = list(db.packages.find(query).sort("arrived_at", -1))
+            pkgs_raw = list(db.packages.find(query).sort([("arrived_at", -1)]))
             for pkg in pkgs_raw:
                 pkg["_id"] = str(pkg["_id"])
                 status = pkg.get("status", "arrived")
@@ -243,7 +243,7 @@ def community():
             {"description": {"$regex": search_query, "$options": "i"}}
         ]
     
-    posts = list(db.community_posts.find(query).sort("created_at", -1))
+    posts = list(db.community_posts.find(query).sort([("created_at", -1)]))
     now = datetime.now()
     username = session.get("username", "")
     for post in posts:
@@ -337,7 +337,7 @@ def post_detail(post_id):
         else:
             post["time_ago"] = "Just now"
         
-        comments = list(db.comments.find({"post_id": post_id}).sort("created_at", 1))
+        comments = list(db.comments.find({"post_id": post_id}).sort([("created_at", 1)]))
         for comment in comments:
             comment["_id"] = str(comment["_id"])
             if "created_at" in comment and comment["created_at"]:
@@ -490,7 +490,7 @@ def admin_packages():
         packages = []
         if db is not None:
             try:
-                packages = list(db.packages.find(query).sort("arrived_at", -1))
+                packages = list(db.packages.find(query).sort([("arrived_at", -1)]))
                 for pkg in packages:
                     pkg["_id"] = str(pkg["_id"])
                     pkg["package_id"] = str(pkg["_id"])
@@ -615,6 +615,8 @@ def signup():
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
         apartment_number = request.form.get("apartment_number", "").strip().upper()
+        if apartment_number and not apartment_number.startswith("A-"):
+            apartment_number = "A-" + apartment_number
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "")
@@ -700,7 +702,7 @@ def api_latest_sensor_readings():
         return jsonify({"error": "Database unavailable"}), 500
 
     limit = int(request.args.get("limit", 50))
-    docs = list(db.sensor_readings.find({}).sort("timestamp", -1).limit(limit))
+    docs = list(db.sensor_readings.find({}).sort([("timestamp", -1)]).limit(limit))
 
     for d in docs:
         d["_id"] = str(d["_id"])
@@ -727,9 +729,9 @@ def admin_overview():
         print(f"Admin overview - alerts_today: {len(alerts_today)}, open_alerts: {len(open_alerts)}, maintenance: {len(maintenance)}, packages: {len(unpicked_packages)}")
         
         recent_alerts_query = db.alerts.find()
-        recent_alerts_query = recent_alerts_query.sort("timestamp", -1)
+        recent_alerts_query = recent_alerts_query.sort([("timestamp", -1)])
         recent_alerts = list(recent_alerts_query.limit(5))
-        recent_maintenance = list(db.maintenance_requests.find().sort("created_at", -1).limit(5))
+        recent_maintenance = list(db.maintenance_requests.find().sort([("created_at", -1)]).limit(5))
         
         print(f"Admin overview - recent_alerts: {len(recent_alerts)}, recent_maintenance: {len(recent_maintenance)}")
         
@@ -791,7 +793,7 @@ def admin_alerts():
             query["status"] = status
         
         alerts_query = db.alerts.find(query)
-        alerts_query = alerts_query.sort("timestamp", -1)
+        alerts_query = alerts_query.sort([("timestamp", -1)])
         alerts = list(alerts_query)
         for alert in alerts:
             alert["_id"] = str(alert["_id"])
@@ -853,7 +855,7 @@ def admin_maintenance():
         if status:
             query["status"] = status
         
-        requests = list(db.maintenance_requests.find(query).sort("created_at", -1))
+        requests = list(db.maintenance_requests.find(query).sort([("created_at", -1)]))
         
         for req in requests:
             req["_id"] = str(req["_id"])
@@ -1016,7 +1018,7 @@ def admin_room_history(room_id):
         
         all_readings = list(db.sensor_readings.find(
             {"apartment_id": apartment_id, "room": room_name}
-        ).sort("timestamp", -1).limit(100))
+        ).sort([("timestamp", -1)]).limit(100))
         
         readings_by_timestamp = {}
         for reading in all_readings:
@@ -1079,7 +1081,7 @@ def admin_community_posts():
         if category:
             query["category"] = category
         
-        posts = list(db.community_posts.find(query).sort("created_at", -1))
+        posts = list(db.community_posts.find(query).sort([("created_at", -1)]))
         
         for post in posts:
             post["_id"] = str(post["_id"])
