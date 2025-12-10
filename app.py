@@ -65,16 +65,22 @@ def dashboard():
             user = db.users.find_one({"username": session.get("username")})
             if user:
                 session["first_name"] = user.get("first_name", "User")
-        except:
-            pass
+        except Exception as e:
+            print("Error loading user:", e)
     
     alerts = []
     sensor = None
+<<<<<<< Updated upstream
     maintenance_requests = []
+=======
+    pending_count = 0   
+
+>>>>>>> Stashed changes
     if db is not None:
         try:
             alerts = list(db.alerts.find({"status": "new"}))
             sensor = db.sensors.find_one()
+<<<<<<< Updated upstream
             
             username = session.get("username", "")
             apartment_number = session.get("apartment_number", "")
@@ -106,6 +112,28 @@ def dashboard():
                          maintenance_requests=maintenance_requests,
                          pending_count=pending_count if db is not None else 0,
                          current_date=date_str)
+=======
+
+            username = session.get("username", "")
+            pending_count = db.packages.count_documents({
+                "status": "pending",   
+                "resident": username      
+            })
+        except Exception as e:
+            print("Error loading dashboard data:", e)
+            alerts = []
+            sensor = None
+            pending_count = 0
+
+    return render_template(
+        "resident/dashboard.html",
+        alerts=alerts,
+        sensor_data=sensor,
+        pending_count=pending_count, 
+    )
+
+>>>>>>> Stashed changes
+
 
 
 @app.route("/packages")
@@ -369,25 +397,47 @@ def delete_post(post_id):
 def maintenance():
     if "username" not in session or session.get("role") != "resident":
         return redirect(url_for("login"))
+<<<<<<< Updated upstream
     
     if request.method == "POST":
         if db is None:
             return render_template("resident/maintenance.html", error="Database unavailable")
         
+=======
+
+    if request.method == "POST":
+        if db is None:
+            return render_template("resident/maintenance.html", error="Database unavailable")
+
+>>>>>>> Stashed changes
         try:
             category = request.form.get("category", "").strip()
             description = request.form.get("description", "").strip()
             urgency = request.form.get("urgency", "normal").strip()
             entry_permit = request.form.get("entry_permit") == "1"
+<<<<<<< Updated upstream
             
             if not category or not description:
                 return render_template("resident/maintenance.html", error="Category and description are required.")
             
+=======
+
+            if not category or not description:
+                return render_template(
+                    "resident/maintenance.html",
+                    error="Category and description are required."
+                )
+
+>>>>>>> Stashed changes
             username = session.get("username", "")
             first_name = session.get("first_name", "")
             last_name = session.get("last_name", "")
             apartment_number = session.get("apartment_number", "")
+<<<<<<< Updated upstream
             
+=======
+
+>>>>>>> Stashed changes
             if db is not None:
                 try:
                     user = db.users.find_one({"username": username})
@@ -397,7 +447,11 @@ def maintenance():
                         apartment_number = user.get("apartment_number", apartment_number)
                 except:
                     pass
+<<<<<<< Updated upstream
             
+=======
+
+>>>>>>> Stashed changes
             maintenance_data = {
                 "apartment_number": apartment_number,
                 "resident_name": f"{first_name} {last_name}".strip(),
@@ -409,15 +463,26 @@ def maintenance():
                 "status": "pending",
                 "created_at": datetime.now()
             }
+<<<<<<< Updated upstream
             
             result = db.maintenance_requests.insert_one(maintenance_data)
             
+=======
+
+            db.maintenance_requests.insert_one(maintenance_data)
+
+>>>>>>> Stashed changes
             return render_template("resident/maintenance_success.html")
         except Exception as e:
             print(f"Error creating maintenance request: {e}")
             return render_template("resident/maintenance.html", error="Could not submit request")
+<<<<<<< Updated upstream
     
+=======
+
+>>>>>>> Stashed changes
     return render_template("resident/maintenance.html")
+
 
 
 @app.route("/admin")
@@ -655,6 +720,7 @@ def admin_overview():
         return jsonify({"error": "Database unavailable"}), 500
     
     try:
+<<<<<<< Updated upstream
         alerts_today = list(db.alerts.find({"status": "new"}))
         open_alerts = list(db.alerts.find({"status": {"$in": ["new", "open"]}}))
         maintenance = list(db.maintenance_requests.find({"status": {"$ne": "resolved"}}))
@@ -1080,3 +1146,18 @@ def admin_community_post(post_id):
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
+=======
+        collections = db.list_collection_names()
+        return f"MongoDB OK! Collections: {collections}"
+    except Exception as e:
+        return f"MongoDB error: {e}", 500
+
+
+def print_routes():
+    for rule in app.url_map.iter_rules():
+        print(rule, "->", rule.endpoint)
+
+
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5001)
+>>>>>>> Stashed changes
