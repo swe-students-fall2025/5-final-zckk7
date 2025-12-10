@@ -1,5 +1,4 @@
 # Smart Apartment System
-
 [![WebApp CI/CD](https://github.com/swe-students-fall2025/5-final-zckk7/actions/workflows/webapp.yml/badge.svg)](https://github.com/swe-students-fall2025/5-final-zckk7/actions/workflows/webapp.yml)
 [![Sensor Simulator CI/CD](https://github.com/swe-students-fall2025/5-final-zckk7/actions/workflows/sensor_simulator.yml/badge.svg)](https://github.com/swe-students-fall2025/5-final-zckk7/actions/workflows/sensor_simulator.yml)
 [![Alert System CI/CD](https://github.com/swe-students-fall2025/5-final-zckk7/actions/workflows/alert_system.yml/badge.svg)](https://github.com/swe-students-fall2025/5-final-zckk7/actions/workflows/alert_system.yml)
@@ -15,6 +14,7 @@ Smart apartment management platform with real-time sensor monitoring, automated 
 ## Team Members
 
 - [Siqi Zhu](https://github.com/HelenZhutt)
+- [Krystal Lin](https://github.com/krystalll-0)
 
 ## Getting Started
 
@@ -108,3 +108,19 @@ pytest tests/ --cov=app --cov-report=term
 pytest sensor_simulator/tests/ --cov=sensor_simulator --cov-report=term
 pytest alert_system/tests/ --cov=alert_system --cov-report=term
 ```
+ 8 changes: 6 additions & 2 deletions8  
+alert_system/Dockerfile
+Original file line number	Diff line number	Diff line change
+@@ -1,6 +1,10 @@
+FROM python:3.12
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+
+COPY alert_engine.py .
+
+CMD ["python", "-u", "alert_engine.py"]
