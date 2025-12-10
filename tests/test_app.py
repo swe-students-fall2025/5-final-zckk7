@@ -8,6 +8,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app import app, convert_objectid_to_str, allowed_file
 from bson import ObjectId
 
+def create_mock_cursor(data=None):
+    if data is None:
+        data = []
+    mock_cursor = MagicMock()
+    mock_cursor.sort.return_value = mock_cursor
+    mock_cursor.limit.return_value = data
+    mock_cursor.__iter__ = lambda self: iter(data)
+    return mock_cursor
+
 class TestApp(unittest.TestCase):
     
     def setUp(self):
@@ -207,8 +216,8 @@ class TestApp(unittest.TestCase):
             "apartment_number": "A-101"
         }
         mock_db.alerts.find.return_value = []
-        mock_db.sensor_readings.find.return_value = []
-        mock_db.maintenance_requests.find.return_value = []
+        mock_db.sensor_readings.find.return_value = create_mock_cursor([])
+        mock_db.maintenance_requests.find.return_value = create_mock_cursor([])
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'testuser'
@@ -220,7 +229,7 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_packages_with_session(self, mock_db):
-        mock_db.packages.find.return_value = []
+        mock_db.packages.find.return_value = create_mock_cursor([])
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'testuser'
@@ -231,7 +240,7 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_community_with_session(self, mock_db):
-        mock_db.community_posts.find.return_value = []
+        mock_db.community_posts.find.return_value = create_mock_cursor([])
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'testuser'
@@ -271,7 +280,7 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_admin_maintenance_get(self, mock_db):
-        mock_db.maintenance_requests.find.return_value = []
+        mock_db.maintenance_requests.find.return_value = create_mock_cursor([])
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'admin'
@@ -282,8 +291,8 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_admin_overview_with_auth(self, mock_db):
-        mock_db.alerts.find.return_value = []
-        mock_db.maintenance_requests.find.return_value = []
+        mock_db.alerts.find.return_value = create_mock_cursor([])
+        mock_db.maintenance_requests.find.return_value = create_mock_cursor([])
         mock_db.packages.find.return_value = []
         
         with self.client.session_transaction() as sess:
@@ -305,7 +314,7 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_admin_alerts_with_auth(self, mock_db):
-        mock_db.alerts.find.return_value = []
+        mock_db.alerts.find.return_value = create_mock_cursor([])
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'admin'
@@ -357,7 +366,7 @@ class TestApp(unittest.TestCase):
     
     @patch('app.db')
     def test_admin_room_history_with_auth(self, mock_db):
-        mock_db.sensor_readings.find.return_value = []
+        mock_db.sensor_readings.find.return_value = create_mock_cursor([])
         
         with self.client.session_transaction() as sess:
             sess['username'] = 'admin'
