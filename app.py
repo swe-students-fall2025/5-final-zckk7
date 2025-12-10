@@ -618,9 +618,18 @@ def signup():
     if request.method == "POST":
         first_name = request.form.get("first_name", "").strip()
         last_name = request.form.get("last_name", "").strip()
-        apartment_number = request.form.get("apartment_number", "").strip().upper()
-        if apartment_number and not apartment_number.startswith("A-"):
-            apartment_number = "A-" + apartment_number
+        apartment_number_input = request.form.get("apartment_number", "").strip().upper()
+        standardized_apt_id = apartment_number_input
+        if apartment_number_input.isdigit() and len(apartment_number_input) == 3:
+            standardized_apt_id = f"A-{apartment_number_input}"
+        elif len(apartment_number_input) <= 3 and not apartment_number_input.startswith("A-"):
+            pass
+        valid_apt_ids = [f"A-{100 + i}" for i in range(1, 9)]
+        if standardized_apt_id not in valid_apt_ids:
+            error = "Apartment ID invalid."
+            return render_template("signup.html", error=error)
+        apartment_number = standardized_apt_id
+
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
         role = request.form.get("role", "")
